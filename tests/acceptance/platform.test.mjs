@@ -12,8 +12,10 @@ test("Kaiti has exactly four canonical wards", () => {
 });
 
 test("dashboard never claims unverified integration health", () => {
-  const page = read("artifacts/commandcentre/src/pages/dashboard.tsx");
-  assert.match(page, /SERVICE HEALTH NOT VERIFIED/);
+  const page = read("artifacts/commandcentre/src/components/layout.tsx");
+  assert.match(page, /api<\{ status: string \}>\("healthz"\)/);
+  assert.match(page, /health\.isError\s*\?\s*"System unavailable"/);
+  assert.match(page, /health\.data\?\.status === "ok"\s*\?\s*"System Online"/);
   assert.doesNotMatch(page, /label:\s*"MESSAGING_UPLINK",\s*status:\s*"OPERATIONAL"/);
 });
 

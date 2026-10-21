@@ -111,7 +111,7 @@ export const RECORD_MODULES: ModuleDef[] = [
 
   // ── Political CRM & stakeholders ───────────────────────────────────────────
   {
-    key: "stakeholders", title: "Political CRM & Stakeholders", feature: "Political CRM & Stakeholders",
+    key: "stakeholders", title: "Contacts", feature: "Contacts",
     description: "Politicians, journalists, influencers, community leaders and allied organisations, with outreach readiness and next actions.",
     rbac: "kol", navGroup: "OUTREACH & MESSAGING", icon: "Handshake", titleField: "name",
     fields: [
@@ -283,7 +283,7 @@ export const RECORD_MODULES: ModuleDef[] = [
 
   // ── Events & planning ──────────────────────────────────────────────────────
   {
-    key: "strategic-events", title: "Strategic Events & Itinerary", feature: "Strategic Events / Campaign Planning and Itinerary",
+    key: "strategic-events", title: "Event Operations", feature: "Strategic Events / Campaign Planning and Itinerary",
     description: "Operational briefs for high-stakes events and the candidate's itinerary: venue, logistics, security, travel and debrief.",
     rbac: "events", navGroup: "OUTREACH & MESSAGING", icon: "Briefcase", titleField: "name",
     fields: [

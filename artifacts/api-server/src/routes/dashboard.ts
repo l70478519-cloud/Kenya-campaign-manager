@@ -2,7 +2,17 @@ import { Router } from "express";
 import { db, membersTable, volunteersTable, messageCampaignsTable, canvassVisitsTable, canvassSessionsTable, narrativeMentionsTable, milestonesTable, campaignEventsTable, campaignSettingsTable, warRoomBriefsTable, campaignWards } from "@workspace/db";
 import { sql, eq, gte, inArray, and, or, isNull, isNotNull } from "drizzle-orm";
 
+import { DASHBOARD_OVERVIEW_SQL } from "../lib/dashboard-overview-sql";
+
 const router = Router();
+
+router.get("/overview", async (_req, res) => {
+  const result = await db.execute(sql.raw(DASHBOARD_OVERVIEW_SQL));
+  const row = result.rows[0];
+  if (!row) { res.status(503).json({ error: "Dashboard unavailable" }); return; }
+  const previous = Number(row.previousMonth);
+  res.json({ ...row, growthRate: previous > 0 ? Math.round((Number(row.newThisMonth) - previous) / previous * 100) : null });
+});
 
 router.get("/summary", async (req, res) => {
   const today = new Date().toISOString().slice(0, 10);

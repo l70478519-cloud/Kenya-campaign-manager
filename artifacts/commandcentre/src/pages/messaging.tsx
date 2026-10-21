@@ -1,3 +1,4 @@
+import { useSearch } from "wouter";
 import { WARDS } from "@/lib/wards";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
@@ -845,7 +846,9 @@ const TABS: { id: Channel; label: string; color: string; desc: string }[] = [
 ];
 
 export default function Messaging() {
-  const [tab, setTab] = useState<Channel>("sms");
+  const search = useSearch();
+  const [tab, setTab] = useState<Channel>(() => new URLSearchParams(search).get("channel") === "email" ? "email" : "sms");
+  useEffect(() => { setTab(new URLSearchParams(search).get("channel") === "email" ? "email" : "sms"); }, [search]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [onfonHealth, setOnfonHealth] = useState<{ status: string; error?: string; balances?: Array<{ type?: string; credits?: string }> } | null>(null);
   const [checkingOnfon, setCheckingOnfon] = useState(false);

@@ -143,7 +143,7 @@ function ProtectedRoutes() {
         <Route path="/credentials">{() => <Guarded module="credentials" component={Credentials} />}</Route>
         <Route path="/analytics">{() => <Guarded module="dashboard" component={Analytics} />}</Route>
         <Route path="/admin">{() => <Guarded module="admin" component={Admin} />}</Route>
-        <Route path="/command-centre">{() => <Guarded module="dashboard" component={CommandCentre} />}</Route>
+        <Route path="/command-centre">{() => <Guarded module="dashboard" component={Dashboard} />}</Route>
         <Route path="/system-health">{() => <Guarded module="admin" component={SystemHealth} />}</Route>
         <Route path="/features" component={FeatureCatalogue} />
         <Route path="/security" component={Security} />

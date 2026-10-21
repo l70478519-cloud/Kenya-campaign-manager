@@ -1,83 +1,115 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { AiAssistPanel } from "@/components/ai-assist-panel";
+
 import { useAuth } from "@/lib/auth";
 import { useRecordModules } from "@/pages/module-records";
-import { iconFor } from "@/lib/records";
-import { useTenancy, switchCampaign, LEGACY_HREFS, legacyHidden } from "@/lib/tenancy";
-import { CAMPAIGN } from "@/lib/wards";
-import { 
-  Menu, X, Activity, Users, PieChart, MessageSquare, 
-  Map, UserPlus, FileText, Calendar, 
-  ShieldAlert, Target, Star, Shield, LayoutDashboard, LogOut, Banknote, Vote, Database, Award, Settings, BarChart2, Crosshair, Radio, TrendingUp, Mic, BrainCircuit, ClipboardList, Crown, LayoutGrid, ServerCog, Building2, KeyRound
+import { api } from "@/lib/records";
+import { useQuery } from "@tanstack/react-query";
+import {
+  useTenancy,
+  switchCampaign,
+  LEGACY_HREFS,
+  legacyHidden,
+} from "@/lib/tenancy";
+
+import {
+  Menu,
+  X,
+  Lock,
+  Mail,
+  Users,
+  PieChart,
+  MessageSquare,
+  Map,
+  FileText,
+  Calendar,
+  ShieldAlert,
+  Target,
+  LayoutDashboard,
+  LogOut,
+  Banknote,
+  Vote,
+  Award,
+  Settings,
+  BarChart2,
+  BrainCircuit,
+  ClipboardList,
+  Building2,
 } from "lucide-react";
 
-
-const navGroups = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  locked?: boolean;
+};
+const navGroups: { title: string; items: NavItem[] }[] = [
   {
-    title: "Command",
+    title: "Mission Control",
     items: [
-      { href: "/command-centre", label: "Executive command centre", icon: Crown },
-      { href: "/dashboard", label: "Command overview", icon: LayoutDashboard },
-      { href: "/strategist", label: "AI chief strategist", icon: BrainCircuit },
-      { href: "/analytics", label: "Analytics hub", icon: BarChart2 },
-      { href: "/campaign-plan", label: "Campaign countdown", icon: Target },
-    ],
-  },
-  {
-    title: "Voter data",
-    items: [
-      { href: "/members", label: "Voters", icon: Users },
-      { href: "/voters-db", label: "Constituent database", icon: Database },
-      { href: "/segments", label: "Segmentation", icon: PieChart },
-    ],
-  },
-  {
-    title: "Outreach & messaging",
-    items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/members", label: "Members", icon: Users },
+      { href: "/segments", label: "Segments", icon: PieChart },
+      {
+        href: "/deepfake",
+        label: "AI Deepfake Detection",
+        icon: ShieldAlert,
+        locked: true,
+      },
+      {
+        href: "/surveys",
+        label: "Opinion Polls",
+        icon: BarChart2,
+        locked: true,
+      },
       { href: "/messaging", label: "Messaging", icon: MessageSquare },
-      { href: "/speeches", label: "Speech & manifesto", icon: Mic },
-      { href: "/events", label: "Event logistics", icon: Calendar },
-      { href: "/operations", label: "Tasks · approvals · incidents", icon: ClipboardList },
-      { href: "/kol", label: "KOL influence network", icon: Star },
+      {
+        href: "/wa-templates",
+        label: "WA Templates",
+        icon: ClipboardList,
+        locked: true,
+      },
+      { href: "/field-ops", label: "Field Ops", icon: Map },
+      { href: "/events", label: "Events", icon: Calendar },
+      {
+        href: "/messaging?channel=email",
+        label: "Email Marketing",
+        icon: Mail,
+      },
+      { href: "/fundraising", label: "Fundraising", icon: Banknote },
+      { href: "/credentials", label: "Credentials Hub", icon: Award },
     ],
   },
   {
-    title: "Field operations",
+    title: "Strategic Events",
     items: [
-      { href: "/field-ops", label: "Field operations", icon: Map },
-      { href: "/volunteers", label: "Volunteer command", icon: UserPlus },
+      { href: "/m/strategic-events", label: "Event Operations", icon: Target },
+      {
+        href: "/strategist",
+        label: "AI Planner & Briefings",
+        icon: BrainCircuit,
+      },
     ],
   },
   {
-    title: "Intelligence",
+    title: "Stakeholder CRM",
+    items: [{ href: "/m/stakeholders", label: "Contacts", icon: Users }],
+  },
+  {
+    title: "Publishing",
     items: [
-      { href: "/surveys", label: "Opinion polls & surveys", icon: FileText },
-      { href: "/intelligence", label: "Political intelligence", icon: ShieldAlert },
-      { href: "/narrative-response", label: "Narrative response centre", icon: MessageSquare },
-      { href: "/social-listening", label: "Political social listening", icon: Radio },
-      { href: "/swot", label: "SWOT analysis", icon: Crosshair },
+      {
+        href: "/content-studio",
+        label: "Content Studio",
+        icon: FileText,
+        locked: true,
+      },
     ],
   },
   {
-    title: "Election day",
-    items: [
-      { href: "/election-day", label: "Election day ops", icon: Vote },
-      { href: "/turnout", label: "Turnout forecast", icon: TrendingUp },
-    ],
-  },
-  {
-    title: "Administration",
-    items: [
-      { href: "/fundraising", label: "Pledges & fundraising", icon: Banknote },
-      { href: "/credentials", label: "Credentials hub", icon: Award },
-      { href: "/admin", label: "System admin", icon: Settings },
-      { href: "/system-health", label: "System health & audit", icon: ServerCog },
-      { href: "/tenancy", label: "Organisations & campaigns", icon: Building2 },
-      { href: "/security", label: "Account security", icon: KeyRound },
-      { href: "/features", label: "All features", icon: LayoutGrid },
-    ],
+    title: "Election Day Command",
+    items: [{ href: "/election-day", label: "HQ Tally", icon: Vote }],
   },
 ];
 
@@ -111,61 +143,30 @@ const NAV_PERM: Record<string, string> = {
   "/tenancy": "admin",
 };
 
-const PATH_MODULE: Record<string, string> = {
-  "/dashboard": "dashboard",
-  "/strategist": "dashboard",
-  "/members": "members",
-  "/voters-db": "voters-db",
-  "/segments": "segments",
-  "/messaging": "messaging",
-  "/field-ops": "field-ops",
-  "/volunteers": "volunteers",
-  "/surveys": "surveys",
-  "/events": "events",
-  "/intelligence": "narrative",
-  "/narrative-response": "narrative-response",
-  "/social-listening": "social-listening",
-  "/swot": "swot",
-  "/campaign-plan": "campaign-plan",
-  "/kol": "kol",
-  "/speeches": "speeches",
-  "/fundraising": "fundraising",
-  "/election-day": "election-day",
-  "/turnout": "turnout",
-  "/credentials": "credentials",
-  "/analytics": "analytics",
-  "/admin": "admin",
-};
-
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, can, logout } = useAuth();
-  const currentModule = PATH_MODULE[location] ?? "dashboard";
-
-  // Registry modules (finance, CRM, nominations, …) come from the API, already
-  // filtered to what this user's role can open, and slot into their nav group.
+  const { can, logout } = useAuth();
   const { data: recordCatalogue } = useRecordModules();
-  const GROUP_ORDER = ["COMMAND", "VOTER DATA", "OUTREACH & MESSAGING", "FIELD OPERATIONS", "INTELLIGENCE", "DATA INTELLIGENCE", "CANDIDATE & PARTY", "ELECTION DAY", "FINANCE & RESOURCES", "ADMINISTRATION"];
-  const mergedGroups = (() => {
-    const map = new globalThis.Map<string, { title: string; items: { href: string; label: string; icon: React.ComponentType<{ className?: string }> }[] }>();
-    for (const g of navGroups) map.set(g.title, { title: g.title, items: [...g.items] });
-    for (const m of recordCatalogue?.modules ?? []) {
-      if (!map.has(m.navGroup)) map.set(m.navGroup, { title: m.navGroup, items: [] });
-      map.get(m.navGroup)!.items.push({ href: `/m/${m.key}`, label: m.title.toUpperCase(), icon: iconFor(m.icon) });
-    }
-    const rank = (t: string) => { const i = GROUP_ORDER.indexOf(t); return i === -1 ? GROUP_ORDER.length : i; };
-    return [...map.values()].sort((a, b) => rank(a.title) - rank(b.title));
-  })();
-
+  const health = useQuery({
+    queryKey: ["server-health"],
+    queryFn: () => api<{ status: string }>("healthz"),
+    retry: false,
+    refetchInterval: 30_000,
+  });
   const { data: tenancy } = useTenancy();
 
-  const visibleGroups = mergedGroups
+  const visibleGroups = navGroups
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => {
         if (legacyHidden(tenancy) && LEGACY_HREFS.has(item.href)) return false;
-        const mod = NAV_PERM[item.href];
+        if (item.locked) return true;
+        if (item.href.startsWith("/m/"))
+          return !!recordCatalogue?.modules.some(
+            (m) => `/m/${m.key}` === item.href,
+          );
+        const mod = NAV_PERM[item.href.split("?")[0]];
         return mod ? can(mod) : true;
       }),
     }))
@@ -178,43 +179,91 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="kaiti-shell flex h-dvh min-h-0 w-full max-w-full overflow-hidden bg-background text-foreground font-sans">
-      {mobileMenuOpen && <button type="button" aria-label="Close navigation" className="fixed inset-0 z-40 bg-black/70 lg:hidden" onClick={() => setMobileMenuOpen(false)} />}
-      <aside className={`${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} fixed inset-y-0 left-0 z-50 w-64 max-w-[85vw] border-r border-border bg-card kaiti-glass-sidebar flex flex-col transition-transform lg:static lg:translate-x-0 lg:shrink-0`}>
-        <div className="p-4 md:p-6 flex items-center gap-3 border-b border-border">
-          <div role="img" aria-label="Command Centre logo" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full kenya-emblem shadow-sm"><span className="text-sm font-black tracking-tight">C</span></div>
+      {mobileMenuOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          className="fixed inset-0 z-40 bg-black/70 lg:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+      <aside
+        className={`${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} fixed inset-y-0 left-0 z-50 w-80 max-w-[85vw] border-r border-border bg-card kaiti-glass-sidebar flex flex-col transition-transform lg:static lg:translate-x-0 lg:shrink-0`}
+      >
+        <div className="h-20 px-6 flex shrink-0 items-center gap-3 border-b border-border">
+          <div
+            role="img"
+            aria-label="Command Centre logo"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full kenya-emblem shadow-sm"
+          >
+            <span className="text-sm font-black tracking-tight">C</span>
+          </div>
           <div className="flex flex-col">
-            <span className="font-semibold tracking-tight text-base">Campaign Command Centre</span>
-            <span className="text-xs text-muted-foreground">Campaign workspace</span>
+            <span className="font-semibold tracking-tight text-base">
+              Command Centre
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Kenya campaign workspace
+            </span>
           </div>
-          <button type="button" aria-label="Close menu" className="ml-auto p-1 lg:hidden" onClick={() => setMobileMenuOpen(false)}><X className="w-5 h-5" /></button>
-          <div className="hidden">
-          </div>
+          <button
+            type="button"
+            aria-label="Close menu"
+            className="ml-auto p-1 lg:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <div className="hidden"></div>
         </div>
-        
-        <nav className="flex-1 py-4 overflow-y-auto">
-          <div className="space-y-5 px-2">
+
+        <nav className="min-h-0 flex-1 py-10 overflow-y-auto">
+          <div className="space-y-7 px-4">
             {visibleGroups.map((group) => (
               <div key={group.title}>
-                <div className="mb-1.5 flex items-center gap-2 bg-secondary/60 border-l-2 border-primary px-3 py-1.5">
-                  <span className="text-primary text-xs font-semibold">▸</span>
-                  <span className="text-[10px] font-mono font-bold tracking-[0.2em] text-foreground uppercase">
+                <div className="mb-3 flex items-center gap-2 px-3 py-1.5">
+                  <span className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                     {group.title}
                   </span>
                 </div>
                 <ul className="space-y-1">
                   {group.items.map((item) => {
-                    const isActive = location === item.href;
+                    const isActive =
+                      (location === item.href.split("?")[0] &&
+                        (item.href.includes("?")
+                          ? window.location.search.includes("channel=email")
+                          : !window.location.search.includes(
+                              "channel=email",
+                            ))) ||
+                      (item.href === "/dashboard" &&
+                        location === "/command-centre");
                     return (
                       <li key={item.href}>
-                        <Link href={item.href} onClick={() => setMobileMenuOpen(false)} className={cn(
-                          "flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors",
-                          isActive
-                            ? "bg-primary text-primary-foreground border-l-2 border-primary-foreground"
-                            : "text-muted-foreground hover:bg-secondary hover:text-foreground border-l-2 border-transparent"
-                        )}>
-                          <item.icon className="w-4 h-4" />
-                          {item.label}
-                        </Link>
+                        {item.locked ? (
+                          <span
+                            aria-disabled="true"
+                            title="Unavailable in this installation"
+                            className="flex items-center gap-4 rounded-sm px-4 py-3 text-base text-muted-foreground opacity-50"
+                          >
+                            <item.icon className="h-5 w-5 shrink-0" />
+                            {item.label}
+                            <Lock className="ml-auto h-4 w-4 shrink-0" />
+                          </span>
+                        ) : (
+                          <Link
+                            href={item.href}
+                            onClick={() => setMobileMenuOpen(false)}
+                            className={cn(
+                              "flex items-center gap-4 rounded-sm px-4 py-3 text-base font-medium transition-colors",
+                              isActive
+                                ? "bg-primary/10 text-primary"
+                                : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                            )}
+                          >
+                            <item.icon className="w-5 h-5 shrink-0" />
+                            {item.label}
+                          </Link>
+                        )}
                       </li>
                     );
                   })}
@@ -224,60 +273,133 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </nav>
 
-        <div className="p-4 border-t border-border mt-auto space-y-2">
-          {user && (
-            <div className="px-3 py-2 bg-secondary/50 border border-border">
-              <p className="font-mono text-[11px] text-foreground truncate">{user.name}</p>
-              <p className="font-mono text-[9px] text-primary tracking-widest uppercase truncate">{user.role}</p>
-            </div>
+        <div className="p-4 border-t border-border mt-auto space-y-2 shrink-0">
+          <Link
+            href="/security"
+            className="flex items-center gap-4 px-4 py-3 text-base text-muted-foreground"
+          >
+            <Users className="h-5 w-5" />
+            My Profile
+          </Link>
+          {can("admin") && (
+            <Link
+              href="/tenancy"
+              className="flex items-center gap-4 px-4 py-3 text-base text-muted-foreground"
+            >
+              <Settings className="h-5 w-5" />
+              Settings
+            </Link>
           )}
-          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2 text-xs font-mono tracking-wider text-muted-foreground hover:bg-secondary hover:text-foreground">
+          <div
+            className="px-4 py-3 text-sm text-muted-foreground"
+            aria-label="English"
+          >
+            🇰🇪 EN
+          </div>
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-4 px-4 py-3 text-base text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
             <LogOut className="w-4 h-4" />
-            Sign out
+            Logout
           </button>
         </div>
       </aside>
 
       <main className="min-w-0 flex-1 flex flex-col h-full overflow-hidden">
-        <header className="min-h-14 border-b border-border flex items-center gap-2 px-3 md:px-6 justify-between shrink-0 bg-card/50 kaiti-glass-header">
+        <header className="h-20 border-b border-border flex items-center gap-2 px-3 md:px-6 justify-between shrink-0 bg-card/50 kaiti-glass-header">
           <div className="flex min-w-0 items-center gap-2 md:gap-4">
-            <button type="button" aria-label="Open navigation" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(true)} className="p-2 border border-border lg:hidden"><Menu className="w-5 h-5" /></button>
+            <button
+              type="button"
+              aria-label="Open navigation"
+              aria-expanded={mobileMenuOpen}
+              onClick={() => setMobileMenuOpen(true)}
+              className="p-2 border border-border lg:hidden"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
             <div className="hidden md:block w-2 h-2 rounded-full bg-primary animate-pulse" />
-            <span className="text-xs md:text-sm text-muted-foreground tracking-normal truncate">Campaign Command Centre</span>
+            <span className="text-xs md:text-sm text-muted-foreground tracking-normal truncate">
+              {location === "/dashboard" || location === "/command-centre"
+                ? "Main Dashboard"
+                : (navGroups
+                    .flatMap((g) => g.items)
+                    .find((i) => i.href.split("?")[0] === location)?.label ??
+                  "Command Centre")}
+            </span>
           </div>
-          <div className="hidden lg:flex items-center gap-4">
-            <span className="font-mono text-[10px] text-muted-foreground">{new Date().toLocaleString("en-KE", { timeZone: "Africa/Nairobi", hour12: false })}</span>
-            {!tenancy || tenancy.campaigns.length <= 1 ? (
-              <div className="px-2 py-1 bg-primary/10 text-primary font-mono text-[10px] border border-primary/30">
-                {[CAMPAIGN.candidate, `${CAMPAIGN.constituency} ${CAMPAIGN.seat ?? ""}`.trim()].filter(Boolean).join(" · ") || "Set up your campaign"}
-              </div>
-            ) : null}
+          <div
+            title="Application server availability; provider integrations have separate health checks"
+            className="ml-auto flex items-center gap-2 text-sm text-muted-foreground"
+          >
+            <span
+              className={cn(
+                "h-2.5 w-2.5 rounded-full",
+                health.isSuccess && health.data.status === "ok"
+                  ? "bg-emerald-500"
+                  : "bg-amber-500",
+              )}
+            />
+            {health.isFetching && !health.data
+              ? "Checking system…"
+              : health.isError
+                ? "System unavailable"
+                : health.data?.status === "ok"
+                  ? "System Online"
+                  : "Checking system…"}
           </div>
           {tenancy && tenancy.campaigns.length > 1 && (
             <label className="flex items-center gap-2 text-xs min-w-0">
               <span className="sr-only">Active campaign</span>
-              <Building2 className="w-4 h-4 text-primary shrink-0" aria-hidden />
+              <Building2
+                className="w-4 h-4 text-primary shrink-0"
+                aria-hidden
+              />
               <select
                 value={tenancy.activeCampaignId ?? ""}
-                onChange={e => void switchCampaign(Number(e.target.value))}
+                onChange={(e) => void switchCampaign(Number(e.target.value))}
                 className="bg-background border border-primary/40 text-primary px-2 py-1 font-mono text-[11px] max-w-[14rem] truncate"
               >
-                {tenancy.campaigns.map(c => <option key={c.id} value={c.id}>{c.name}{c.organisationName && tenancy.campaigns.some(x => x.organisationId !== c.organisationId) ? ` — ${c.organisationName}` : ""}</option>)}
+                {tenancy.campaigns.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.organisationName &&
+                    tenancy.campaigns.some(
+                      (x) => x.organisationId !== c.organisationId,
+                    )
+                      ? ` — ${c.organisationName}`
+                      : ""}
+                  </option>
+                ))}
               </select>
             </label>
           )}
         </header>
-        <div className="min-w-0 w-full max-w-full flex-1 overflow-x-hidden overflow-y-auto p-3 sm:p-4 lg:p-6">
-          {tenancy && !(tenancy.campaigns.find(c => c.id === tenancy.activeCampaignId)?.wards?.length) && (
-            <div role="alert" className="kaiti-glass rounded-xl p-3 mb-4 text-sm border border-amber-500/50">
-              <strong>Finish setting up this campaign.</strong> Choose its seat (President, Governor, Senator, Woman Rep, MP or MCA) and area so every module knows its wards.{" "}
-              {can("admin", "write") ? <Link href="/tenancy" className="underline font-semibold">Open Organisations &amp; campaigns</Link> : "Ask an administrator to complete the setup."}
-            </div>
-          )}
+        <div className="min-w-0 w-full max-w-full flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-10">
+          {location !== "/dashboard" &&
+            location !== "/command-centre" &&
+            tenancy &&
+            !tenancy.campaigns.find((c) => c.id === tenancy.activeCampaignId)
+              ?.wards?.length && (
+              <div
+                role="alert"
+                className="kaiti-glass rounded-xl p-3 mb-4 text-sm border border-amber-500/50"
+              >
+                <strong>Finish setting up this campaign.</strong> Choose its
+                seat (President, Governor, Senator, Woman Rep, MP or MCA) and
+                area so every module knows its wards.{" "}
+                {can("admin", "write") ? (
+                  <Link href="/tenancy" className="underline font-semibold">
+                    Open Organisations &amp; campaigns
+                  </Link>
+                ) : (
+                  "Ask an administrator to complete the setup."
+                )}
+              </div>
+            )}
           {children}
         </div>
       </main>
-      <AiAssistPanel module={currentModule} />
     </div>
   );
 }

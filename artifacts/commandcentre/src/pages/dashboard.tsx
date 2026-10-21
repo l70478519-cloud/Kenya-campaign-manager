@@ -1,205 +1,356 @@
-import { WARDS, CAMPAIGN } from "@/lib/wards";
-import { useGetDashboardSummary, useGetDashboardActivity } from "@workspace/api-client-react";
-import { Users, MessageSquare, Map, ShieldAlert, Target, Calendar, Zap, Clock, TrendingUp, Activity, User, Building2 } from "lucide-react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useGetDashboardActivity } from "@workspace/api-client-react";
+import {
+  Users,
+  UserPlus,
+  Radio,
+  Map,
+  Activity,
+  MessageSquare,
+  HeartPulse,
+  Download,
+  BookOpen,
+  X,
+} from "lucide-react";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+} from "recharts";
+import { api } from "@/lib/records";
+import { useTenancy } from "@/lib/tenancy";
 
-function StatCard({ label, value, icon: Icon, sub }: { label: string; value: string | number; icon: any; sub?: string }) {
-  return (
-    <div className="bg-card border border-border p-4">
-      <div className="flex items-start justify-between mb-3">
-        <span className="text-[10px] font-mono tracking-widest text-muted-foreground">{label}</span>
-        <Icon className="w-4 h-4 text-primary" />
-      </div>
-      <div className="text-3xl font-bold tabular-nums">{value}</div>
-      {sub && <div className="text-[10px] font-mono text-muted-foreground mt-1">{sub}</div>}
-    </div>
-  );
-}
-
-function ThreatBadge({ level }: { level: string }) {
-  const colors: Record<string, string> = {
-    low: "text-blue-400 border-blue-400/30",
-    medium: "text-yellow-400 border-yellow-400/30",
-    high: "text-orange-400 border-orange-400/30",
-    critical: "text-red-400 border-red-400/30 animate-pulse",
-  };
-  return (
-    <span className={`font-mono text-[10px] border px-2 py-0.5 ${colors[level] ?? colors.low}`}>
-      [ {level.toUpperCase()} ]
-    </span>
-  );
-}
-
-function ModuleTag({ module }: { module: string }) {
-  const tags: Record<string, string> = {
-    members: "IDENTITY",
-    messaging: "UPLINK",
-    "field-ops": "FIELD",
-    volunteers: "VOLUNTEER",
-    intelligence: "INTEL",
-    "campaign-plan": "PLAN",
-    events: "EVENT",
-    surveys: "SURVEY",
-    kol: "KOL",
-    segments: "SEGMENT",
-  };
-  return (
-    <span className="font-mono text-[9px] text-primary border border-primary/30 px-1.5 py-0.5">
-      {tags[module] ?? module.toUpperCase()}
-    </span>
-  );
-}
+type Overview = {
+  totalMembers: number;
+  newThisMonth: number;
+  previousMonth: number;
+  growthRate: number | null;
+  activeVolunteers: number;
+  openTasks: number;
+  messagesThisMonth: number;
+  acquisition: { date: string; members: number }[];
+};
 
 export default function Dashboard() {
-  const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary();
-  const { data: activity, isLoading: activityLoading } = useGetDashboardActivity();
-
+  const overview = useQuery({
+    queryKey: ["dashboard-overview"],
+    queryFn: () => api<Overview>("dashboard/overview"),
+    refetchInterval: 60_000,
+  });
+  const {
+    data: activity,
+    isLoading: activityLoading,
+    isError: activityError,
+  } = useGetDashboardActivity();
+  const { data: tenancy } = useTenancy();
+  const [help, setHelp] = useState(false);
+  const [fullTrail, setFullTrail] = useState(false);
+  const d = overview.data;
+  const number = (value: number | undefined) =>
+    value === undefined ? "—" : value.toLocaleString("en-KE");
+  const stats = [
+    {
+      label: "TOTAL BASE",
+      value: number(d?.totalMembers),
+      icon: Users,
+      note: d ? `+${number(d.newThisMonth)} this month` : undefined,
+      title: "Members registered in the active campaign",
+    },
+    {
+      label: "GROWTH RATE",
+      value: d?.growthRate == null ? "—" : `${d.growthRate}%`,
+      icon: UserPlus,
+      title:
+        "New members this calendar month compared with last month; unavailable without a previous-month baseline",
+    },
+    {
+      label: "ACTIVE CAMPAIGNS",
+      value: tenancy
+        ? number(tenancy.campaigns.filter((c) => c.status === "active").length)
+        : "—",
+      icon: Radio,
+      title: "Active campaign workspaces you can access",
+    },
+    {
+      label: "VOLUNTEERS",
+      value: number(d?.activeVolunteers),
+      icon: Map,
+      title: "Active volunteers in this campaign",
+    },
+    {
+      label: "OPEN TASKS",
+      value: number(d?.openTasks),
+      icon: Activity,
+      title: "Unfinished volunteer assignments and operations tasks",
+    },
+    {
+      label: "MSGS SENT (MO)",
+      value: number(d?.messagesThisMonth),
+      icon: MessageSquare,
+      title:
+        "Recipients of dispatched messages this calendar month; not a delivery confirmation",
+    },
+  ];
+  const download = () => {
+    if (!d) return;
+    const rows = [
+      ["Metric", "Value"],
+      ...stats.map((s) => [s.label, s.value]),
+      ["Generated at", new Date().toISOString()],
+    ];
+    const blob = new Blob(
+      [
+        rows
+          .map((r) => r.map((v) => `"${v.replaceAll('"', '""')}"`).join(","))
+          .join("\r\n"),
+      ],
+      { type: "text/csv;charset=utf-8" },
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "campaign-dashboard-report.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-widest">COMMAND OVERVIEW</h1>
-          <p className="text-[10px] font-mono text-muted-foreground mt-1 tracking-widest">[ CAMPAIGN_READ ] [ LIVE_DATA ]</p>
-        </div>
-        {summary?.daysToElection != null && (
-          <div className="bg-primary/10 border border-primary/30 px-6 py-3 text-center">
-            <div className="text-4xl font-bold text-primary tabular-nums">{summary.daysToElection}</div>
-            <div className="text-[9px] font-mono text-primary/80 tracking-widest mt-1">DAYS TO ELECTION</div>
-          </div>
-        )}
+    <div className="space-y-7">
+      <div className="flex justify-end">
+        <button
+          onClick={() => setHelp(!help)}
+          className="flex items-center gap-1.5 text-sm text-muted-foreground"
+        >
+          <BookOpen className="h-4 w-4" />
+          How this works
+        </button>
       </div>
-
-      {summaryLoading ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="bg-card border border-border p-4 h-24 animate-pulse" />
-          ))}
+      {help && (
+        <div className="replica-panel p-5 text-sm text-muted-foreground">
+          Figures reflect your campaign records. Growth compares new
+          registrations this month with last month. The chart shows weekly
+          registrations over twelve weeks. Hover over a card for its definition.
+          Calendar periods use Kenya time.
         </div>
-      ) : summary ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard label="TOTAL MEMBERS" value={summary.totalMembers.toLocaleString()} icon={Users} sub="IDENTITY GRAPH" />
-          <StatCard label="ACTIVE VOLUNTEERS" value={summary.activeVolunteers} icon={Activity} sub="DEPLOYED" />
-          <StatCard label="MESSAGES SENT" value={summary.messagesSent.toLocaleString()} icon={MessageSquare} sub="ALL CHANNELS" />
-          <StatCard label="DOORS KNOCKED" value={summary.doorsKnocked.toLocaleString()} icon={Map} sub="FIELD OPS" />
-          <StatCard label="WARDS COVERED" value={summary.wardsCovered} icon={TrendingUp} sub="ACTIVE ZONES" />
-          <StatCard label="OPEN THREATS" value={summary.openThreats} icon={ShieldAlert} sub="NARRATIVE" />
-          <StatCard label="READINESS SCORE" value={`${summary.campaignReadiness}%`} icon={Target} sub="OVERALL" />
-          <StatCard label="UPCOMING EVENTS" value={summary.upcomingEvents} icon={Calendar} sub="SCHEDULED" />
+      )}
+      {overview.isError && (
+        <div role="alert" className="text-sm text-red-400">
+          Dashboard data could not be loaded.{" "}
+          <button className="underline" onClick={() => void overview.refetch()}>
+            Retry
+          </button>
         </div>
-      ) : null}
-
-      {/* Candidate Profile + Constituency Intel */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-card border border-border">
-          <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-            <User className="w-4 h-4 text-primary" />
-            <span className="font-mono text-xs tracking-widest">CANDIDATE_PROFILE</span>
+      )}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6 xl:gap-5">
+        {stats.map(({ label, value, icon: Icon, note, title }) => (
+          <div key={label} title={title} className="replica-panel replica-stat">
+            <div className="flex items-center justify-between gap-3">
+              <span className="min-w-0 text-xs sm:text-sm font-semibold tracking-wide text-muted-foreground">
+                {label}
+              </span>
+              <Icon className="h-5 w-5 shrink-0 text-primary" />
+            </div>
+            <strong aria-busy={overview.isLoading}>{value}</strong>
+            {note && (
+              <span className="mt-3 inline-block rounded bg-emerald-500/10 px-2 py-1 text-xs text-emerald-400">
+                {note}
+              </span>
+            )}
           </div>
-          <div className="p-4 space-y-2.5">
-            <div className="flex items-start justify-between mb-1">
-              <div>
-                <p className="font-bold text-sm tracking-wide">{(CAMPAIGN.candidate || CAMPAIGN.name).toUpperCase()}</p>
-                <p className="font-mono text-[10px] text-primary tracking-widest mt-0.5">{`${CAMPAIGN.constituency} ${CAMPAIGN.seat ?? ""} campaign`.toUpperCase()}</p>
-              </div>
-              <span className="font-mono text-[9px] border border-primary/30 px-2 py-0.5 text-primary shrink-0">2027</span>
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-              {[
-                ["WORKSPACE", CAMPAIGN.name],
-                ["COUNTY", CAMPAIGN.county || "—"],
-                ["ASSEMBLY WARDS", String(WARDS.length)],
-                ["WARDS", WARDS.slice(0, Math.ceil(WARDS.length / 2)).join(" · ")],
-                ["OTHER WARDS", WARDS.slice(Math.ceil(WARDS.length / 2)).join(" · ") || "—"],
-                ["POLLING STATIONS", "Awaiting verified IEBC import"],
-              ].map(([k, v]) => (
-                <div key={k}>
-                  <p className="font-mono text-[8px] text-muted-foreground">{k}</p>
-                  <p className="font-mono text-[10px] text-foreground">{v}</p>
-                </div>
-              ))}
-            </div>
-            <div className="pt-2 border-t border-border">
-              <p className="font-mono text-[8px] text-muted-foreground tracking-widest mb-1">DATA STATUS</p>
-              <p className="font-mono text-[10px] text-muted-foreground">Single-campaign workspace. Live operational counts come from the database. Polling-station totals require verified IEBC records.</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-card border border-border">
-          <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-            <Building2 className="w-4 h-4 text-primary" />
-            <span className="font-mono text-xs tracking-widest">CONSTITUENCY_INTEL</span>
-          </div>
-          <div className="p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: "ELECTORAL AREA", value: CAMPAIGN.areaLabel },
-                { label: "ASSEMBLY WARDS", value: String(WARDS.length) },
-                { label: "WARD NAMES", value: WARDS.join(", ") },
-                { label: "POLLING STATIONS", value: "Pending", note: `Import verified ${CAMPAIGN.constituency} IEBC station records` },
-              ].map(({ label, value, note }) => (
-                <div key={label} className="bg-secondary/50 px-3 py-3">
-                  <p className="font-mono text-[8px] text-muted-foreground">{label}</p>
-                  <p className="font-bold text-lg tabular-nums text-primary">{value}</p>
-                  {note && <p className="font-mono text-[8px] text-muted-foreground mt-1">{note}</p>}
-                </div>
-              ))}
-            </div>
-            <div className="border-t border-border pt-2 space-y-1">
-              <p className="font-mono text-[9px] text-muted-foreground">LEGACY FIGURES REMOVED</p>
-              <p className="font-mono text-[9px] text-muted-foreground">Polling-station and voter data will appear only after verified constituency-specific IEBC records are imported.</p>
-              <a className="font-mono text-[9px] text-primary underline" href="https://www.iebc.or.ke/docs/rov_per_polling_station.pdf" target="_blank" rel="noreferrer">OPEN OFFICIAL IEBC 2022 REGISTER</a>
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-card border border-border">
-          <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-            <Zap className="w-4 h-4 text-primary" />
-            <span className="font-mono text-xs tracking-widest">ACTIVITY_FEED</span>
+      <div className="grid grid-cols-1 gap-7 xl:grid-cols-[2.2fr_1fr]">
+        <section className="replica-panel min-w-0 p-5 sm:p-7">
+          <h2 className="replica-title mb-7">MEMBER ACQUISITION VELOCITY</h2>
+          <div className="replica-chart">
+            {overview.isLoading ? (
+              <p className="text-sm text-muted-foreground">
+                Loading registrations…
+              </p>
+            ) : d ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={d.acquisition}
+                  margin={{ top: 8, right: 12, bottom: 8, left: 0 }}
+                >
+                  <defs>
+                    <linearGradient
+                      id="acquisition-fill"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop
+                        offset="0%"
+                        stopColor="#008c51"
+                        stopOpacity={0.28}
+                      />
+                      <stop offset="100%" stopColor="#008c51" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#25292e" strokeDasharray="3 4" />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(v) =>
+                      new Date(`${v}T12:00:00Z`).toLocaleDateString("en-KE", {
+                        month: "short",
+                        day: "numeric",
+                      })
+                    }
+                    tick={{ fill: "#9ca3af", fontSize: 12 }}
+                    axisLine={false}
+                    tickLine={false}
+                    minTickGap={18}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fill: "#9ca3af", fontSize: 12 }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={42}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "#16181b",
+                      border: "1px solid #30353b",
+                      borderRadius: 8,
+                    }}
+                    labelStyle={{ color: "#fff" }}
+                  />
+                  <Area
+                    name="Members"
+                    type="monotone"
+                    dataKey="members"
+                    stroke="#12b76a"
+                    strokeWidth={2}
+                    fill="url(#acquisition-fill)"
+                    isAnimationActive={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Registration history unavailable.
+              </p>
+            )}
           </div>
-          {activityLoading ? (
-            <div className="p-4 space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-10 bg-secondary/50 animate-pulse" />
-              ))}
-            </div>
-          ) : activity && activity.length > 0 ? (
-            <div className="divide-y divide-border">
-              {activity.slice(0, 10).map((item) => (
-                <div key={item.id} className="flex items-start gap-3 px-4 py-3">
-                  <ModuleTag module={item.module} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate">{item.description}</p>
-                    {item.actor && (
-                      <p className="text-[10px] font-mono text-muted-foreground">OPERATIVE: {item.actor}</p>
-                    )}
+        </section>
+        <section className="replica-panel min-w-0 p-5 sm:p-7">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <h2 className="replica-title">LIVE ACTIVITY FEED</h2>
+            <button
+              onClick={() => setFullTrail(true)}
+              className="shrink-0 text-xs text-primary"
+            >
+              Full trail ↗
+            </button>
+          </div>
+          <div className="replica-chart overflow-y-auto pr-2">
+            {activityLoading ? (
+              <p className="text-sm text-muted-foreground">Loading activity…</p>
+            ) : activityError ? (
+              <p role="alert" className="text-sm text-red-400">
+                Activity could not be loaded.
+              </p>
+            ) : !activity?.length ? (
+              <p className="text-sm text-muted-foreground">
+                No activity recorded.
+              </p>
+            ) : (
+              activity.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex gap-3 border-b border-border py-3 first:pt-0"
+                >
+                  <span className="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500" />
+                  <div className="min-w-0">
+                    <p className="text-sm leading-6">{item.description}</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      {new Date(item.timestamp).toLocaleString("en-KE", {
+                        timeZone: "Africa/Nairobi",
+                      })}{" "}
+                      · {item.module}
+                    </p>
                   </div>
-                  <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
-                    {new Date(item.timestamp).toLocaleTimeString()}
-                  </span>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center justify-center py-12">
-              <p className="font-mono text-xs text-muted-foreground">[ NO_ACTIVITY_RECORDED ]</p>
-            </div>
-          )}
-        </div>
-
-        <div className="bg-card border border-border">
-          <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-            <Clock className="w-4 h-4 text-primary" />
-            <span className="font-mono text-xs tracking-widest">SYSTEM_STATUS</span>
+              ))
+            )}
           </div>
-          <div className="p-4 space-y-3">
-            <p className="font-mono text-[10px] text-muted-foreground">Live service health is not yet connected to this panel. Operational status must be confirmed from provider checks and API monitoring.</p>
-            <span className="font-mono text-[10px] text-yellow-400 border border-yellow-400/30 px-2 py-1 inline-block">SERVICE HEALTH NOT VERIFIED</span>
-          </div>
-        </div>
+        </section>
       </div>
+      <section>
+        <div className="flex flex-wrap items-center gap-3">
+          <HeartPulse className="h-5 w-5 text-red-500" />
+          <h2 className="replica-title">CAMPAIGN HEALTH</h2>
+          <span className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs text-amber-400">
+            {overview.isError
+              ? "Data unavailable"
+              : !d
+                ? "Awaiting data"
+                : d.openTasks
+                  ? "Needs Attention"
+                  : "No open tasks"}
+          </span>
+          <button
+            disabled={!d}
+            onClick={download}
+            className="ml-auto flex items-center gap-2 rounded border border-border px-4 py-2 text-sm disabled:opacity-40"
+          >
+            <Download className="h-4 w-4" />
+            Download report
+          </button>
+        </div>
+        <div className="replica-panel mt-4 p-5 text-sm text-muted-foreground">
+          {d
+            ? `${number(d.openTasks)} open tasks · ${number(d.activeVolunteers)} active volunteers`
+            : "Awaiting campaign data"}
+        </div>
+      </section>
+      {fullTrail && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setFullTrail(false)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="Recent activity trail"
+            className="replica-panel max-h-[80vh] w-full max-w-2xl overflow-y-auto p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              autoFocus
+              aria-label="Close activity trail"
+              onClick={() => setFullTrail(false)}
+              className="float-right"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <h2 className="text-lg font-semibold">Recent activity trail</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Latest 15 recorded campaign actions.
+            </p>
+            {activity?.map((item) => (
+              <div
+                key={item.id}
+                className="border-b border-border py-4 text-sm"
+              >
+                <p>{item.description}</p>
+                <time className="text-xs text-muted-foreground">
+                  {new Date(item.timestamp).toLocaleString("en-KE", {
+                    timeZone: "Africa/Nairobi",
+                  })}
+                </time>
+              </div>
+            ))}
+          </section>
+        </div>
+      )}
     </div>
   );
 }
