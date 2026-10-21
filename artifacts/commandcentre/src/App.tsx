@@ -8,6 +8,8 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
+import Deepfake from "@/pages/deepfake";
+import WaTemplates from "@/pages/wa-templates";
 import Dashboard from "@/pages/dashboard";
 import Members from "@/pages/members";
 import Segments from "@/pages/segments";
@@ -118,6 +120,9 @@ function ProtectedRoutes() {
   return (
     <Layout>
       <Switch>
+        <Route path="/deepfake">{() => <Guarded module="intelligence" component={Deepfake} />}</Route>
+        <Route path="/wa-templates">{() => <Guarded module="messaging" component={WaTemplates} />}</Route>
+        <Route path="/content-studio">{() => <Guarded module="messaging" component={() => <ModuleRecords moduleKey="content-calendar" />} />}</Route>
         <Route path="/dashboard">{() => <Guarded module="dashboard" component={Dashboard} />}</Route>
         <Route path="/strategist">{() => <Guarded module="dashboard" component={Strategist} />}</Route>
         <Route path="/members">{() => <Guarded module="voters" component={Members} />}</Route>
@@ -149,7 +154,7 @@ function ProtectedRoutes() {
         <Route path="/security" component={Security} />
         <Route path="/tenancy">{() => <Guarded module="admin" component={TenancyAdmin} />}</Route>
         {/* Registry modules: access is checked per module by the page and the API. */}
-        <Route path="/m/:key" component={ModuleRecords} />
+        <Route path="/m/:key">{() => <ModuleRecords />}</Route>
         <Route component={NotFound} />
       </Switch>
     </Layout>

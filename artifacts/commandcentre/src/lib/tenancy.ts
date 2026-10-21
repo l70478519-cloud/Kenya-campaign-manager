@@ -11,7 +11,7 @@ export type TenancyContext = { activeCampaignId: number | null; primaryCampaignI
 
 /** Older modules. Hidden outside the primary campaign only if the server reports database isolation is off. */
 export const LEGACY_HREFS = new Set([
-  "/dashboard", "/strategist", "/analytics", "/campaign-plan", "/members", "/voters-db", "/segments", "/messaging", "/speeches",
+  "/dashboard", "/deepfake", "/wa-templates", "/strategist", "/analytics", "/campaign-plan", "/members", "/voters-db", "/segments", "/messaging", "/speeches",
   "/events", "/operations", "/kol", "/field-ops", "/volunteers", "/surveys", "/intelligence", "/narrative-response",
   "/social-listening", "/swot", "/election-day", "/turnout", "/fundraising", "/credentials",
 ]);

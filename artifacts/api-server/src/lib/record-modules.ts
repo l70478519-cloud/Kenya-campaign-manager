@@ -132,8 +132,8 @@ export const RECORD_MODULES: ModuleDef[] = [
     closedStatuses: ["dormant"], dueField: "nextActionDue", importable: true,
   },
   {
-    key: "content-calendar", title: "Content Calendar & Approvals", feature: "Communications and Digital Media Studio",
-    description: "Plan posts, press statements and media briefings across channels, with a review-and-approve workflow before publishing.",
+    key: "content-calendar", title: "Content Studio", feature: "Communications and Digital Media Studio",
+    description: "Create and preview posts, press statements and media briefings. Review and approve copy, track planned publication times, and record published links.",
     rbac: "messaging", navGroup: "OUTREACH & MESSAGING", icon: "CalendarClock", titleField: "headline",
     fields: [
       { key: "headline", label: "Headline / working title", type: "text", required: true, list: true, max: 200 },
@@ -143,6 +143,7 @@ export const RECORD_MODULES: ModuleDef[] = [
       { key: "ward", label: "Target ward", type: "ward", list: true },
       { key: "body", label: "Draft copy", type: "textarea", required: true },
       { key: "assetLink", label: "Creative asset link", type: "url" },
+      { key: "publishedLink", label: "Published link", type: "url", help: "Add the public post link after publishing on the selected channel" },
       { key: "owner", label: "Owner", type: "text", max: 120 },
     ],
     statuses: ["draft", "in_review", "approved", "published", "rejected"], initialStatus: "draft",

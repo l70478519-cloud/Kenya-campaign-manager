@@ -64,7 +64,7 @@ router.get("/stats", async (_req, res) => {
 
 // Provider config — MUST be before /:id routes. Never return secrets to the browser.
 router.get("/providers", async (_req, res) => {
-  const providers = await db.select().from(messagingProvidersTable);
+  const providers = await db.select().from(messagingProvidersTable).where(inArray(messagingProvidersTable.channel, ["sms", "whatsapp", "email"]));
   res.json(providers.map(({ apiKey, apiSecret, username, smtpPassword, webhookSecret, ...safe }) => ({
     ...safe,
     hasApiKey: Boolean(apiKey), hasApiSecret: Boolean(apiSecret),
@@ -79,7 +79,7 @@ router.post("/providers", async (req, res) => {
     phoneNumber, phoneNumberId, businessAccountId, webhookSecret,
     smtpHost, smtpPort, smtpUser, smtpPassword, fromEmail, fromName, isActive,
   } = req.body;
-  if (!channel || !provider) { res.status(400).json({ error: "channel and provider required" }); return; }
+  if (!["sms", "whatsapp", "email"].includes(channel) || !provider) { res.status(400).json({ error: "channel and provider required" }); return; }
   const existingRows = await db.select().from(messagingProvidersTable).where(eq(messagingProvidersTable.channel, channel));
   const existing = existingRows[0];
   const values = {
@@ -132,7 +132,7 @@ router.get("/providers/onfon/health", async (_req, res) => {
 });
 
 router.delete("/providers/:id", async (req, res) => {
-  await db.delete(messagingProvidersTable).where(eq(messagingProvidersTable.id, parseInt(req.params.id)));
+  await db.delete(messagingProvidersTable).where(and(eq(messagingProvidersTable.id, parseInt(req.params.id)), inArray(messagingProvidersTable.channel, ["sms", "whatsapp", "email"])));
   res.status(204).send();
 });
 

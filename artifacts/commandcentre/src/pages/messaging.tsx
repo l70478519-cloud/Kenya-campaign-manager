@@ -847,8 +847,8 @@ const TABS: { id: Channel; label: string; color: string; desc: string }[] = [
 
 export default function Messaging() {
   const search = useSearch();
-  const [tab, setTab] = useState<Channel>(() => new URLSearchParams(search).get("channel") === "email" ? "email" : "sms");
-  useEffect(() => { setTab(new URLSearchParams(search).get("channel") === "email" ? "email" : "sms"); }, [search]);
+  const [tab, setTab] = useState<Channel>(() => new URLSearchParams(search).get("channel") === "email" ? "email" : new URLSearchParams(search).get("channel") === "whatsapp" ? "whatsapp" : "sms");
+  useEffect(() => { setTab(new URLSearchParams(search).get("channel") === "email" ? "email" : new URLSearchParams(search).get("channel") === "whatsapp" ? "whatsapp" : "sms"); }, [search]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [onfonHealth, setOnfonHealth] = useState<{ status: string; error?: string; balances?: Array<{ type?: string; credits?: string }> } | null>(null);
   const [checkingOnfon, setCheckingOnfon] = useState(false);

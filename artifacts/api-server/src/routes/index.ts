@@ -1,3 +1,5 @@
+import deepfakeRouter from "./deepfake";
+import waTemplatesRouter from "./wa-templates";
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
 import dashboardRouter from "./dashboard";
@@ -46,6 +48,8 @@ router.use(healthRouter);
 router.use("/auth", authRouter);
 router.use("/operations", operationsRouter);
 router.use("/dashboard", dashboardRouter);
+router.use("/deepfake", deepfakeRouter);
+router.use("/wa-templates", waTemplatesRouter);
 router.use("/members", membersRouter);
 router.use("/segments", segmentsRouter);
 router.use("/messages", messagingRouter);

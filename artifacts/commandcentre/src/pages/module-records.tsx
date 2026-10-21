@@ -43,8 +43,9 @@ function nextStatuses(mod: ModuleDef, current: string): string[] {
   return [current, ...(allowed ?? mod.statuses.filter(s => s !== current))];
 }
 
-export default function ModuleRecords() {
-  const { key } = useParams<{ key: string }>();
+export default function ModuleRecords({ moduleKey }: { moduleKey?: string } = {}) {
+  const params = useParams<{ key: string }>();
+  const key = moduleKey ?? params.key;
   const { data: catalogue, isLoading: catLoading, error: catError } = useRecordModules();
   const mod = catalogue?.modules.find(m => m.key === key);
   const wards = catalogue?.wards ?? [];
@@ -211,6 +212,7 @@ export default function ModuleRecords() {
           : <ul className="grid gap-3">{rows.map(row => <li key={row.id} className={`border rounded-xl p-3 bg-background/30 flex flex-wrap justify-between gap-3 ${isOverdue(row) ? "border-red-500/50" : "border-border"}`}>
               <div className="min-w-0 flex-1">
                 <h3 className="font-semibold break-words">{row.title}</h3>
+                {mod.key === "content-calendar" && <details className="mt-3 text-sm"><summary className="cursor-pointer text-primary">Preview content</summary><div className="mt-3 rounded-lg border border-border p-4"><p className="whitespace-pre-wrap break-words">{String(row.data.body ?? "")}</p>{typeof row.data.assetLink === "string" && /^https?:\/\//.test(row.data.assetLink) && <a href={row.data.assetLink} target="_blank" rel="noreferrer" className="mt-3 inline-block underline">Open creative asset</a>}<button onClick={() => { const url = URL.createObjectURL(new Blob([String(row.data.body ?? "")], { type: "text/plain" })); const a = document.createElement("a"); a.href = url; a.download = `content-${row.id}.txt`; a.click(); URL.revokeObjectURL(url); }} className="ml-3 underline">Download copy</button></div></details>}
                 <p className="text-xs text-muted-foreground">{row.ward ?? "Constituency-wide"}{isOverdue(row) && <span className="text-red-300 font-medium"> · overdue</span>}</p>
                 <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1 mt-2 text-sm">
                   {listFields.map(f => <div key={f.key} className="min-w-0"><dt className="text-xs text-muted-foreground">{f.label}</dt><dd className="truncate">{formatValue(f, row.data[f.key])}</dd></div>)}

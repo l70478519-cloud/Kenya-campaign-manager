@@ -275,6 +275,11 @@ router.patch("/:module/:id", async (req, res) => {
   }
   const { data: changes, errors } = validate(mod, (req.body?.data ?? {}) as Record<string, unknown>, true);
   if (errors.length) { res.status(400).json({ error: errors[0], errors }); return; }
+  const hasContentChanges = Object.entries(changes).some(([k,v]) => JSON.stringify(existing.data[k] ?? null) !== JSON.stringify(v));
+  if (mod.key === "content-calendar" && hasContentChanges) {
+    if (existing.status === "published") { res.status(409).json({ error: "Published content is final. Create a new draft for revisions." }); return; }
+    if (["in_review", "approved", "rejected"].includes(existing.status)) nextStatus = "draft";
+  }
   const merged = { ...existing.data, ...changes };
   const title = String(merged[mod.titleField] ?? existing.title).slice(0, 300);
   const ward = (merged.ward as string | null) ?? null;

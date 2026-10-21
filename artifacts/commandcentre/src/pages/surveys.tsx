@@ -247,7 +247,7 @@ export default function Surveys() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold tracking-widest">INTELLIGENCE GATHERING</h1>
+          <h1 className="text-xl font-bold tracking-widest">Opinion Polls</h1>
           <p className="text-[10px] font-mono text-muted-foreground mt-0.5">OPINION POLLS · TOPICAL ISSUES · FIELD SURVEYS · {CAMPAIGN.areaLabel.toUpperCase()}</p>
         </div>
         <div className="flex gap-2">

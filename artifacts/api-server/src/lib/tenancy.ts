@@ -28,7 +28,7 @@ export const PRIMARY_CAMPAIGN_ID = 1;
 
 /** Older routes. Hidden outside the primary campaign only if database isolation failed to start. */
 export const LEGACY_PREFIXES = [
-  "/dashboard", "/members", "/segments", "/messages", "/field-ops", "/volunteers", "/surveys", "/events",
+  "/dashboard", "/deepfake", "/wa-templates", "/members", "/segments", "/messages", "/field-ops", "/volunteers", "/surveys", "/events",
   "/intelligence", "/campaign-plan", "/kol", "/fundraising", "/election-day", "/turnout", "/voter-registry",
   "/credentials", "/analytics", "/insights", "/ai", "/speeches", "/social", "/di", "/strategist", "/operations",
 ];

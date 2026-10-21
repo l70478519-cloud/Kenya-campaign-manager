@@ -55,6 +55,8 @@ const MODULE_BY_PREFIX: Array<[string, string]> = [
   ["/fundraising/mpesa", "finance"],
   ["/operations", "events"],
   ["/dashboard", "dashboard"],
+  ["/deepfake", "intelligence"],
+  ["/wa-templates", "messaging"],
   ["/members", "voters"],
   ["/segments", "segmentation"],
   ["/messages", "messaging"],

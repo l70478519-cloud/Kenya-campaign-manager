@@ -16,7 +16,6 @@ import {
 import {
   Menu,
   X,
-  Lock,
   Mail,
   Users,
   PieChart,
@@ -42,7 +41,6 @@ type NavItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  locked?: boolean;
 };
 const navGroups: { title: string; items: NavItem[] }[] = [
   {
@@ -55,20 +53,17 @@ const navGroups: { title: string; items: NavItem[] }[] = [
         href: "/deepfake",
         label: "AI Deepfake Detection",
         icon: ShieldAlert,
-        locked: true,
       },
       {
         href: "/surveys",
         label: "Opinion Polls",
         icon: BarChart2,
-        locked: true,
       },
       { href: "/messaging", label: "Messaging", icon: MessageSquare },
       {
         href: "/wa-templates",
         label: "WA Templates",
         icon: ClipboardList,
-        locked: true,
       },
       { href: "/field-ops", label: "Field Ops", icon: Map },
       { href: "/events", label: "Events", icon: Calendar },
@@ -103,7 +98,6 @@ const navGroups: { title: string; items: NavItem[] }[] = [
         href: "/content-studio",
         label: "Content Studio",
         icon: FileText,
-        locked: true,
       },
     ],
   },
@@ -116,6 +110,9 @@ const navGroups: { title: string; items: NavItem[] }[] = [
 // Maps a nav href to its backend permission module key (see admin MODULES list).
 const NAV_PERM: Record<string, string> = {
   "/dashboard": "dashboard",
+  "/deepfake": "intelligence",
+  "/wa-templates": "messaging",
+  "/content-studio": "messaging",
   "/strategist": "dashboard",
   "/members": "voters",
   "/voters-db": "constituents",
@@ -161,7 +158,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
       ...group,
       items: group.items.filter((item) => {
         if (legacyHidden(tenancy) && LEGACY_HREFS.has(item.href)) return false;
-        if (item.locked) return true;
         if (item.href.startsWith("/m/"))
           return !!recordCatalogue?.modules.some(
             (m) => `/m/${m.key}` === item.href,
@@ -239,31 +235,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         location === "/command-centre");
                     return (
                       <li key={item.href}>
-                        {item.locked ? (
-                          <span
-                            aria-disabled="true"
-                            title="Unavailable in this installation"
-                            className="flex items-center gap-4 rounded-sm px-4 py-3 text-base text-muted-foreground opacity-50"
-                          >
-                            <item.icon className="h-5 w-5 shrink-0" />
-                            {item.label}
-                            <Lock className="ml-auto h-4 w-4 shrink-0" />
-                          </span>
-                        ) : (
-                          <Link
-                            href={item.href}
-                            onClick={() => setMobileMenuOpen(false)}
-                            className={cn(
-                              "flex items-center gap-4 rounded-sm px-4 py-3 text-base font-medium transition-colors",
-                              isActive
-                                ? "bg-primary/10 text-primary"
-                                : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-                            )}
-                          >
-                            <item.icon className="w-5 h-5 shrink-0" />
-                            {item.label}
-                          </Link>
-                        )}
+                        <Link
+                          href={item.href}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={cn(
+                            "flex items-center gap-4 rounded-sm px-4 py-3 text-base font-medium transition-colors",
+                            isActive
+                              ? "bg-primary/10 text-primary"
+                              : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                          )}
+                        >
+                          <item.icon className="w-5 h-5 shrink-0" />
+                          {item.label}
+                        </Link>
                       </li>
                     );
                   })}
