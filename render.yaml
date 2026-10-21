@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: kenya-campaign-manager
+    runtime: docker
+    plan: starter
+    envVars:
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SECURE_COOKIES
+        value: "1"
+      - key: DATABASE_PATH
+        value: /data/campaigns.db
+    disk:
+      name: campaign-data
+      mountPath: /data
+      sizeGB: 1
