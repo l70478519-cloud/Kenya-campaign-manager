@@ -16,67 +16,67 @@ import {
 
 const navGroups = [
   {
-    title: "COMMAND",
+    title: "Command",
     items: [
-      { href: "/command-centre", label: "EXECUTIVE COMMAND CENTRE", icon: Crown },
-      { href: "/dashboard", label: "COMMAND OVERVIEW", icon: LayoutDashboard },
-      { href: "/strategist", label: "AI CHIEF STRATEGIST", icon: BrainCircuit },
-      { href: "/analytics", label: "ANALYTICS HUB", icon: BarChart2 },
-      { href: "/campaign-plan", label: "CAMPAIGN COUNTDOWN", icon: Target },
+      { href: "/command-centre", label: "Executive command centre", icon: Crown },
+      { href: "/dashboard", label: "Command overview", icon: LayoutDashboard },
+      { href: "/strategist", label: "AI chief strategist", icon: BrainCircuit },
+      { href: "/analytics", label: "Analytics hub", icon: BarChart2 },
+      { href: "/campaign-plan", label: "Campaign countdown", icon: Target },
     ],
   },
   {
-    title: "VOTER DATA",
+    title: "Voter data",
     items: [
-      { href: "/members", label: "VOTERS", icon: Users },
-      { href: "/voters-db", label: "CONSTITUENT DATABASE", icon: Database },
-      { href: "/segments", label: "SEGMENTATION", icon: PieChart },
+      { href: "/members", label: "Voters", icon: Users },
+      { href: "/voters-db", label: "Constituent database", icon: Database },
+      { href: "/segments", label: "Segmentation", icon: PieChart },
     ],
   },
   {
-    title: "OUTREACH & MESSAGING",
+    title: "Outreach & messaging",
     items: [
-      { href: "/messaging", label: "MESSAGING", icon: MessageSquare },
-      { href: "/speeches", label: "SPEECH & MANIFESTO", icon: Mic },
-      { href: "/events", label: "EVENT LOGISTICS", icon: Calendar },
-      { href: "/operations", label: "TASKS · APPROVALS · INCIDENTS", icon: ClipboardList },
-      { href: "/kol", label: "KOL INFLUENCE NETWORK", icon: Star },
+      { href: "/messaging", label: "Messaging", icon: MessageSquare },
+      { href: "/speeches", label: "Speech & manifesto", icon: Mic },
+      { href: "/events", label: "Event logistics", icon: Calendar },
+      { href: "/operations", label: "Tasks · approvals · incidents", icon: ClipboardList },
+      { href: "/kol", label: "KOL influence network", icon: Star },
     ],
   },
   {
-    title: "FIELD OPERATIONS",
+    title: "Field operations",
     items: [
-      { href: "/field-ops", label: "FIELD OPERATIONS", icon: Map },
-      { href: "/volunteers", label: "VOLUNTEER COMMAND", icon: UserPlus },
+      { href: "/field-ops", label: "Field operations", icon: Map },
+      { href: "/volunteers", label: "Volunteer command", icon: UserPlus },
     ],
   },
   {
-    title: "INTELLIGENCE",
+    title: "Intelligence",
     items: [
-      { href: "/surveys", label: "OPINION POLLS & SURVEYS", icon: FileText },
-      { href: "/intelligence", label: "POLITICAL INTELLIGENCE", icon: ShieldAlert },
-      { href: "/narrative-response", label: "NARRATIVE RESPONSE CENTRE", icon: MessageSquare },
-      { href: "/social-listening", label: "POLITICAL SOCIAL LISTENING", icon: Radio },
-      { href: "/swot", label: "SWOT ANALYSIS", icon: Crosshair },
+      { href: "/surveys", label: "Opinion polls & surveys", icon: FileText },
+      { href: "/intelligence", label: "Political intelligence", icon: ShieldAlert },
+      { href: "/narrative-response", label: "Narrative response centre", icon: MessageSquare },
+      { href: "/social-listening", label: "Political social listening", icon: Radio },
+      { href: "/swot", label: "SWOT analysis", icon: Crosshair },
     ],
   },
   {
-    title: "ELECTION DAY",
+    title: "Election day",
     items: [
-      { href: "/election-day", label: "ELECTION DAY OPS", icon: Vote },
-      { href: "/turnout", label: "TURNOUT FORECAST", icon: TrendingUp },
+      { href: "/election-day", label: "Election day ops", icon: Vote },
+      { href: "/turnout", label: "Turnout forecast", icon: TrendingUp },
     ],
   },
   {
-    title: "ADMINISTRATION",
+    title: "Administration",
     items: [
-      { href: "/fundraising", label: "PLEDGES & FUNDRAISING", icon: Banknote },
-      { href: "/credentials", label: "CREDENTIALS HUB", icon: Award },
-      { href: "/admin", label: "SYSTEM ADMIN", icon: Settings },
-      { href: "/system-health", label: "SYSTEM HEALTH & AUDIT", icon: ServerCog },
-      { href: "/tenancy", label: "ORGANISATIONS & CAMPAIGNS", icon: Building2 },
-      { href: "/security", label: "ACCOUNT SECURITY", icon: KeyRound },
-      { href: "/features", label: "ALL FEATURES", icon: LayoutGrid },
+      { href: "/fundraising", label: "Pledges & fundraising", icon: Banknote },
+      { href: "/credentials", label: "Credentials hub", icon: Award },
+      { href: "/admin", label: "System admin", icon: Settings },
+      { href: "/system-health", label: "System health & audit", icon: ServerCog },
+      { href: "/tenancy", label: "Organisations & campaigns", icon: Building2 },
+      { href: "/security", label: "Account security", icon: KeyRound },
+      { href: "/features", label: "All features", icon: LayoutGrid },
     ],
   },
 ];
@@ -183,8 +183,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="p-4 md:p-6 flex items-center gap-3 border-b border-border">
           <div role="img" aria-label="Command Centre logo" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full kenya-emblem shadow-sm"><span className="text-sm font-black tracking-tight">C</span></div>
           <div className="flex flex-col">
-            <span className="font-bold tracking-widest text-sm">COMMAND CENTRE · CAMPAIGN OPERATIONS SYSTEM</span>
-            <span className="text-[10px] text-primary font-mono tracking-widest">[ SYSTEM_ACTIVE ]</span>
+            <span className="font-semibold tracking-tight text-base">Campaign Command Centre</span>
+            <span className="text-xs text-muted-foreground">Campaign workspace</span>
           </div>
           <button type="button" aria-label="Close menu" className="ml-auto p-1 lg:hidden" onClick={() => setMobileMenuOpen(false)}><X className="w-5 h-5" /></button>
           <div className="hidden">
@@ -196,7 +196,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {visibleGroups.map((group) => (
               <div key={group.title}>
                 <div className="mb-1.5 flex items-center gap-2 bg-secondary/60 border-l-2 border-primary px-3 py-1.5">
-                  <span className="text-primary font-mono text-[10px] font-bold">▸</span>
+                  <span className="text-primary text-xs font-semibold">▸</span>
                   <span className="text-[10px] font-mono font-bold tracking-[0.2em] text-foreground uppercase">
                     {group.title}
                   </span>
@@ -207,7 +207,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     return (
                       <li key={item.href}>
                         <Link href={item.href} onClick={() => setMobileMenuOpen(false)} className={cn(
-                          "flex items-center gap-3 px-3 py-2 text-xs font-mono tracking-wider transition-colors",
+                          "flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors",
                           isActive
                             ? "bg-primary text-primary-foreground border-l-2 border-primary-foreground"
                             : "text-muted-foreground hover:bg-secondary hover:text-foreground border-l-2 border-transparent"
@@ -233,7 +233,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           )}
           <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2 text-xs font-mono tracking-wider text-muted-foreground hover:bg-secondary hover:text-foreground">
             <LogOut className="w-4 h-4" />
-            TERMINATE SESSION
+            Sign out
           </button>
         </div>
       </aside>
@@ -243,13 +243,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex min-w-0 items-center gap-2 md:gap-4">
             <button type="button" aria-label="Open navigation" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(true)} className="p-2 border border-border lg:hidden"><Menu className="w-5 h-5" /></button>
             <div className="hidden md:block w-2 h-2 rounded-full bg-primary animate-pulse" />
-            <span className="font-mono text-[10px] md:text-xs text-muted-foreground tracking-widest truncate">COMMAND CENTRE · OPERATIONS SYSTEM</span>
+            <span className="text-xs md:text-sm text-muted-foreground tracking-normal truncate">Campaign Command Centre</span>
           </div>
           <div className="hidden lg:flex items-center gap-4">
-            <span className="font-mono text-[10px] text-muted-foreground">TIME: {new Date().toLocaleString("en-KE", { timeZone: "Africa/Nairobi", hour12: false })}</span>
+            <span className="font-mono text-[10px] text-muted-foreground">{new Date().toLocaleString("en-KE", { timeZone: "Africa/Nairobi", hour12: false })}</span>
             {!tenancy || tenancy.campaigns.length <= 1 ? (
               <div className="px-2 py-1 bg-primary/10 text-primary font-mono text-[10px] border border-primary/30">
-                {[CAMPAIGN.candidate, `${CAMPAIGN.constituency} ${CAMPAIGN.seat ?? ""}`.trim()].filter(Boolean).join(" · ").toUpperCase() || "SET UP YOUR CAMPAIGN"}
+                {[CAMPAIGN.candidate, `${CAMPAIGN.constituency} ${CAMPAIGN.seat ?? ""}`.trim()].filter(Boolean).join(" · ") || "Set up your campaign"}
               </div>
             ) : null}
           </div>

@@ -111,7 +111,7 @@
 
   --app-font-sans: 'Inter', 'Segoe UI', sans-serif;
   --app-font-serif: Georgia, serif;
-  --app-font-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
+  --app-font-mono: 'Inter', 'Segoe UI', sans-serif;
   --radius: 0.35rem;
 
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
@@ -171,7 +171,7 @@ table, [role="table"] {
 .text-\[10px\] { font-size: 0.8rem !important;  line-height: 1.5 !important; }
 
 /* Tighten mono tracking at small sizes for readability */
-.font-mono { letter-spacing: 0.04em; }
+.font-mono { letter-spacing: 0.01em; }
 
 /* Kenya flag palette: charcoal, white, green and restrained red. */
 :root, .dark { --kenya-focus: #f5f5f5; }
@@ -424,3 +424,11 @@ main > div:last-child { padding-bottom: max(1rem, var(--safe-bottom)); padding-l
 .text-primary { color: #72d69a; }
 .bg-primary .text-primary { color: #fff; }
 .kenya-login-aside { background: linear-gradient(145deg, #101211 0 50%, #17221b 100%); border-left: 1px solid rgba(255,255,255,.12); }
+
+/* Typography follows a conventional campaign dashboard: readable sans-serif,
+   natural navigation labels and a clear heading hierarchy. */
+.kaiti-shell main h1 { font-weight: 600; letter-spacing: -0.025em; line-height: 1.25; }
+.kaiti-shell main h2, .kaiti-shell main h3 { font-weight: 600; letter-spacing: -0.015em; }
+.kaiti-shell nav { line-height: 1.45; }
+.kaiti-shell .tracking-widest { letter-spacing: 0.04em; }
+.kaiti-shell label { font-weight: 500; }

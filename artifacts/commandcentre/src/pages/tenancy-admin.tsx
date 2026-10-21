@@ -76,6 +76,7 @@ export default function TenancyAdmin() {
   const users = useQuery<U[]>({ queryKey: ["t-users"], queryFn: () => api("tenancy/users") });
   const [err, setErr] = useState(""); const [msg, setMsg] = useState("");
   const [orgName, setOrgName] = useState("");
+  const [organisationInput, setOrganisationInput] = useState("");
   const [nc, setNc] = useState({ organisationId: "", name: "", seat: "", area: "", electionDate: "" });
   const [np, setNp] = useState<Profile>(toProfile());
   const geo = useQuery<Geo>({ queryKey: ["kenya-geo"], queryFn: () => api<Geo>("tenancy/geography"), staleTime: Infinity });
@@ -89,6 +90,7 @@ export default function TenancyAdmin() {
   useEffect(() => {
     if (orgs.data?.length === 1) {
       setNc(v => v.organisationId ? v : { ...v, organisationId: String(orgs.data![0].id) });
+      setOrganisationInput(v => v || orgs.data![0].name);
     }
   }, [orgs.data]);
 
@@ -101,16 +103,34 @@ export default function TenancyAdmin() {
   const createOrg = (e: FormEvent) => { e.preventDefault(); void run(() => api<Org>("tenancy/organisations", { method: "POST", body: JSON.stringify({ name: orgName }) }).then(created => {
     qc.setQueryData<Org[]>(["t-orgs"], old => [...(old ?? []), { ...created, campaignCount: 0 }]);
     setNc(v => ({ ...v, organisationId: String(created.id) }));
+    setOrganisationInput(created.name);
     setOrgName("");
   }), "Organisation created."); };
+  const matchingOrganisation = orgs.data?.find(o => o.name.trim().toLowerCase() === organisationInput.trim().toLowerCase());
   const createCamp = (e: FormEvent) => {
     e.preventDefault();
-    if (!orgs.data?.some(o => String(o.id) === nc.organisationId)) { setErr("Choose an organisation, or add one in the Organisations panel first."); return; }
-    void run(() => api("tenancy/campaigns", { method: "POST", body: JSON.stringify({
-      organisationId: Number(nc.organisationId), name: nc.name, electionDate: nc.electionDate || null,
-      seat: area.seat, areaCounty: area.county || null, areaConstituency: area.constituency || null, areaWard: area.ward || null,
-      ...profilePayload(np, true),
-    }) }).then(() => { setNc({ organisationId: "", name: "", seat: "", area: "", electionDate: "" }); setNp(toProfile()); setArea({ seat: "", county: "", constituency: "", ward: "" }); }), "Campaign created with its wards. Add members so people can open it.");
+    const name = organisationInput.trim();
+    if (name.length < 2 || name.length > 160) { setErr("Enter an organisation name of 2–160 characters."); return; }
+    void run(async () => {
+      // Resolve typed names before creating the campaign. Cache a new organisation
+      // immediately so retrying a failed campaign save reuses its existing ID.
+      let organisation = matchingOrganisation;
+      if (!organisation) {
+        const created = await api<Org>("tenancy/organisations", { method: "POST", body: JSON.stringify({ name }) });
+        organisation = { ...created, campaignCount: 0 };
+        const saved = organisation;
+        qc.setQueryData<Org[]>(["t-orgs"], old => [...(old ?? []), saved]);
+        setNc(v => ({ ...v, organisationId: String(saved.id) }));
+        setOrganisationInput(saved.name);
+      }
+      await api("tenancy/campaigns", { method: "POST", body: JSON.stringify({
+        organisationId: organisation.id, name: nc.name, electionDate: nc.electionDate || null,
+        seat: area.seat, areaCounty: area.county || null, areaConstituency: area.constituency || null, areaWard: area.ward || null,
+        ...profilePayload(np, true),
+      }) });
+      setNc({ organisationId: String(organisation.id), name: "", seat: "", area: "", electionDate: "" });
+      setNp(toProfile()); setArea({ seat: "", county: "", constituency: "", ward: "" });
+    }, "Campaign created with its wards. Add members so people can open it.");
   };
   const setStatus = (c: Camp, status: string) => run(() => api(`tenancy/campaigns/${c.id}`, { method: "PATCH", body: JSON.stringify({ status }) }), `${c.name} is now ${status}.`);
   const add = (c: Camp) => addUser && run(() => api(`tenancy/campaigns/${c.id}/members`, { method: "POST", body: JSON.stringify({ userId: Number(addUser) }) }).then(() => setAddUser("")), "Member added.");
@@ -142,13 +162,20 @@ export default function TenancyAdmin() {
       <form onSubmit={createCamp} className="kaiti-glass rounded-2xl p-4 space-y-3">
         <h2 className="font-semibold">New campaign</h2>
         <div className="grid sm:grid-cols-2 gap-2">
-          <label className="text-sm">Organisation<select required aria-label="Campaign organisation" disabled={orgs.isPending || !!orgs.error || !orgs.data?.length} value={nc.organisationId} onChange={e => setNc({ ...nc, organisationId: e.target.value })} className={inputCls}><option value="">{orgs.isPending ? "Loading organisations…" : orgs.error ? "Organisations unavailable — retry above" : orgs.data?.length ? "Choose organisation…" : "Add an organisation first"}</option>{orgs.data?.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
+          <label className="text-sm">Organisation
+            <input required minLength={2} maxLength={160} list="campaign-organisations" aria-label="Campaign organisation"
+              disabled={orgs.isPending || !!orgs.error || saving} value={organisationInput}
+              onChange={e => { setOrganisationInput(e.target.value); setNc(v => ({ ...v, organisationId: "" })); }}
+              placeholder={orgs.isPending ? "Loading organisations…" : "Type or choose an organisation"} className={inputCls} />
+            <datalist id="campaign-organisations">{orgs.data?.map(o => <option key={o.id} value={o.name} />)}</datalist>
+            <span className="block mt-1 text-xs text-muted-foreground">{matchingOrganisation ? "Existing organisation selected." : organisationInput.trim().length >= 2 ? "This organisation will be created when you save the campaign." : "Choose a suggestion or type a new organisation name."}</span>
+          </label>
           <label className="text-sm">Campaign name<input required minLength={2} value={nc.name} onChange={e => setNc({ ...nc, name: e.target.value })} className={inputCls} /></label>
           <label className="text-sm">Election date<input type="date" value={nc.electionDate} onChange={e => setNc({ ...nc, electionDate: e.target.value })} className={inputCls} /></label>
         </div>
         <SeatPicker geo={geo.data} v={area} set={setArea} />
         <ProfileFields v={np} set={setNp} derived />
-        <button type="submit" disabled={saving || orgs.isPending || !!orgs.error || !nc.organisationId} className={primary}><Plus size={16} /> {saving ? "Saving…" : "Create campaign"}</button>
+        <button type="submit" disabled={saving || orgs.isPending || !!orgs.error || organisationInput.trim().length < 2} className={primary}><Plus size={16} /> {saving ? "Saving…" : "Create campaign"}</button>
       </form>
     </div>
 

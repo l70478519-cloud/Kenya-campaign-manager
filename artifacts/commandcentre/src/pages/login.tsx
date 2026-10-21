@@ -58,7 +58,7 @@ export default function Login() {
           <div className="mb-8 flex flex-col items-center text-center">
             <div aria-label="Command Centre emblem" role="img" className="mb-5 flex h-20 w-20 items-center justify-center rounded-full kenya-emblem text-2xl font-black tracking-tight">C</div>
             <h1 className="text-3xl font-bold tracking-tight">Command<span className="text-primary">Centre</span></h1>
-            <p className="mt-3 font-mono text-xs tracking-[0.18em] text-muted-foreground">SECURE CONSTITUENCY OPERATIONS</p>
+            <p className="mt-3 font-mono text-xs tracking-[0.18em] text-muted-foreground">Campaign management workspace</p>
           </div>
 
           <div className="kaiti-glass relative rounded-2xl border border-emerald-800/70 bg-card/90 p-7 shadow-2xl shadow-black/30 sm:p-9">
@@ -77,7 +77,7 @@ export default function Login() {
                     maxLength={11}
                     value={code}
                     onChange={e => { setCode(e.target.value); setError(""); }}
-                    className="w-full border border-border bg-background px-3 py-3 text-lg tracking-[0.3em] font-mono text-foreground outline-none transition-colors focus:border-primary"
+                    className="w-full border border-border bg-background px-3 py-3 text-lg tracking-normal font-mono text-foreground outline-none transition-colors focus:border-primary"
                     placeholder="123456"
                   />
                 </div>
@@ -87,7 +87,7 @@ export default function Login() {
                     <p className="text-xs font-mono text-primary">{error}</p>
                   </div>
                 )}
-                <button type="submit" disabled={submitting} className="flex w-full items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-700 p-3 text-sm font-semibold tracking-wide text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60">
+                <button type="submit" disabled={submitting} className="flex w-full items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-700 p-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60">
                   <Shield className="h-4 w-4" />
                   {submitting ? "Verifying…" : "Verify and sign in"}
                 </button>
@@ -96,7 +96,7 @@ export default function Login() {
             ) : (
             <form onSubmit={handleLogin} className="space-y-5">
               <div className="space-y-2">
-                <label htmlFor="operative-id" className="text-sm font-medium">Operative ID (username or email)</label>
+                <label htmlFor="operative-id" className="text-sm font-medium">Username or email</label>
                 <input
                   id="operative-id"
                   type="text"
@@ -110,7 +110,7 @@ export default function Login() {
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="passcode" className="text-sm font-medium">Passcode</label>
+                <label htmlFor="passcode" className="text-sm font-medium">Password</label>
                 <input
                   id="passcode"
                   type="password"
@@ -133,10 +133,10 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex w-full items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-700 p-3 text-sm font-semibold tracking-wide text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex w-full items-center justify-center gap-2 rounded-md border border-emerald-500 bg-emerald-700 p-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Shield className="h-4 w-4" />
-                {submitting ? "AUTHENTICATING…" : "INITIALIZE UPLINK"}
+                {submitting ? "AUTHENTICATING…" : "Sign in"}
               </button>
             </form>
             )}
@@ -157,7 +157,7 @@ export default function Login() {
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:32px_32px]" />
         <div className="relative z-10 text-center">
           <div className="select-none text-[clamp(7rem,18vw,15rem)] font-black leading-none tracking-tighter text-emerald-400/[0.12]">C</div>
-          <div className="-mt-5 font-mono text-sm tracking-[0.3em] text-foreground/80">CONSTITUENCY OPERATIONS SYSTEM</div>
+          <div className="-mt-5 font-mono text-sm tracking-normal text-foreground/80">Campaign Command Centre</div>
           <div className="mt-3 space-y-2 font-mono text-xs tracking-widest text-muted-foreground/70">
             <p>[ SECURE_ACCESS ]</p>
             <p>[ ROLE_BASED_PERMISSIONS ]</p>
