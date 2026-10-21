@@ -14,7 +14,7 @@
 | `PRIMARY_SEAT` | optional | `President`, `Governor`, `Senator`, `Woman Rep`, `MP` or `MCA` for campaign #1 |
 | `PRIMARY_COUNTY`, `PRIMARY_CONSTITUENCY`, `PRIMARY_WARD` | optional | the area for that seat (e.g. `Makueni`, `Kaiti`) |
 | `PRIMARY_CANDIDATE`, `PRIMARY_CAMPAIGN_NAME`, `PRIMARY_ORGANISATION_NAME` | optional | names shown in the app |
-| `MFA_REQUIRED_ROLES` | optional | default `super-admin,campaign-manager,finance-officer,manager` |
+| `MFA_REQUIRED_ROLES` | optional | empty by default (password-only sign-in until 2FA is voluntarily enabled); set a comma-separated role list to enforce enrolment |
 | `MAKUENI_AI_MODE` | optional | `free` to run AI features from templates without an AI key |
 | `AI_INTEGRATIONS_OPENAI_API_KEY`, `AI_INTEGRATIONS_OPENAI_BASE_URL` | optional | AI provider |
 | `SITE_AT_ROOT` | set | `true`: website at `/`, app at `/login` |

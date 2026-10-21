@@ -20,6 +20,8 @@ services:
         generateValue: true
       - key: MFA_ENCRYPTION_KEY
         generateValue: true
+      - key: MFA_REQUIRED_ROLES
+        value: ""
       - key: MFA_ISSUER
         value: Kenya Campaign Manager
       - key: BOOTSTRAP_ADMIN_EMAIL

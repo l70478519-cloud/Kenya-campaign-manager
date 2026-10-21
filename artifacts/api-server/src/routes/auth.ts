@@ -185,6 +185,8 @@ router.get("/me", async (req, res) => {
   }
 
   const mfa = await getMfa(user.id).catch(() => null);
+  // Refresh policy after configuration changes, including existing sessions.
+  req.session.mfaEnrollRequired = roleRequiresMfa(user.role) && mfa?.enabled !== true;
   res.json({
     user: sanitizeUser(user),
     permissions: await permissionsForRole(user.role),

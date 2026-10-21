@@ -93,12 +93,7 @@ export function newRecoveryCodes(): { plain: string[]; hashes: string[] } {
 }
 
 // ── Policy ───────────────────────────────────────────────────────────────────
-const normRole = (r: string) => r.toLowerCase().replace(/[^a-z0-9]/g, "");
-export function roleRequiresMfa(role: string): boolean {
-  const list = (process.env.MFA_REQUIRED_ROLES ?? "super-admin,campaign-manager,finance-officer,manager")
-    .split(",").map(s => normRole(s.trim())).filter(Boolean);
-  return list.includes("all") || list.includes(normRole(role));
-}
+export { roleRequiresMfa } from "./mfa-policy";
 
 // ── Storage ──────────────────────────────────────────────────────────────────
 export type MfaRow = { userId: number; secretEnc: string | null; pendingSecretEnc: string | null; enabled: boolean; recoveryHashes: string[]; lastStep: number | null };
