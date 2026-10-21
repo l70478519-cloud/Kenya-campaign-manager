@@ -1,11 +1,11 @@
-/* Command Centre website — glass on deep green, Kenyan flag accents. */
+/* Kenya flag theme: charcoal, white, green and restrained red accents. */
 :root {
   color-scheme: dark;
-  --bg: #04110b; --bg2: #071a12;
-  --text: #ecf6ef; --muted: #a9c2b2; --faint: #6f8f7c;
-  --green: #18a058; --green-2: #0f7a41; --red: #d7263d; --gold: #f4c400; --black: #0b0b0b;
-  --glass: rgba(14, 38, 28, 0.55); --glass-strong: rgba(10, 30, 21, 0.8);
-  --line: rgba(196, 236, 210, 0.14); --line-2: rgba(196, 236, 210, 0.26);
+  --bg: #101211; --bg2: #191c1a;
+  --text: #f6f6f6; --muted: #b9c0bc; --faint: #929d96;
+  --green: #15803d; --green-2: #006b3f; --red: #bb1d24; --highlight: #f5f5f5; --black: #0b0b0b;
+  --glass: rgba(28, 31, 29, 0.94); --glass-strong: rgba(16, 18, 17, 0.97);
+  --line: rgba(255, 255, 255, 0.12); --line-2: rgba(255, 255, 255, 0.24);
   --radius: 18px; --shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.6);
   --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --display: "Space Grotesk", "Inter", system-ui, sans-serif;
@@ -13,7 +13,7 @@
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     color-scheme: light;
-    --bg: #eef5f0; --bg2: #e3efe7; --text: #0d2016; --muted: #3c5a48; --faint: #5f7a6a;
+    --bg: #fafafa; --bg2: #f1f3f2; --text: #141815; --muted: #4c5a51; --faint: #627168; --highlight: #006b3f;
     --glass: rgba(255, 255, 255, 0.7); --glass-strong: rgba(255, 255, 255, 0.92);
     --line: rgba(13, 32, 22, 0.12); --line-2: rgba(13, 32, 22, 0.22); --shadow: 0 20px 50px -24px rgba(13, 32, 22, 0.25);
   }
@@ -23,19 +23,19 @@ html { scroll-padding-top: 88px; -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; font-family: var(--font); color: var(--text); line-height: 1.6; min-height: 100dvh;
   background:
-    radial-gradient(60rem 40rem at 90% -10%, rgba(24, 160, 88, 0.28), transparent 60%),
-    radial-gradient(44rem 34rem at -10% 20%, rgba(13, 148, 136, 0.18), transparent 60%),
-    radial-gradient(36rem 28rem at 70% 110%, rgba(244, 196, 0, 0.10), transparent 60%),
+    radial-gradient(60rem 40rem at 90% -10%, rgba(0, 107, 63, 0.06), transparent 60%),
+    radial-gradient(44rem 34rem at -10% 20%, rgba(255, 255, 255, 0.015), transparent 60%),
+    radial-gradient(36rem 28rem at 70% 110%, rgba(187, 29, 36, 0.035), transparent 60%),
     linear-gradient(170deg, var(--bg) 0%, var(--bg2) 55%, var(--bg) 100%);
   background-attachment: fixed;
 }
 img, svg { max-width: 100%; display: block; }
 a { color: inherit; }
-:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; border-radius: 6px; }
-.skip { position: absolute; left: -999px; top: 0; background: var(--gold); color: #000; padding: .6rem 1rem; z-index: 100; }
+:focus-visible { outline: 3px solid var(--highlight); outline-offset: 2px; border-radius: 6px; }
+.skip { position: absolute; left: -999px; top: 0; background: var(--highlight); color: #000; padding: .6rem 1rem; z-index: 100; }
 .skip:focus { left: 1rem; top: 1rem; }
 .wrap { width: min(1180px, 100% - 2.5rem); margin-inline: auto; }
-.flag { height: 4px; background: linear-gradient(90deg, var(--black) 0 25%, var(--red) 25% 50%, #fff 50% 52%, var(--green) 52% 100%); }
+.flag { height: 6px; background: linear-gradient(90deg, var(--black) 0 30%, #fff 30% 35%, var(--red) 35% 65%, #fff 65% 70%, var(--green-2) 70% 100%); }
 
 /* Header */
 .site-header { position: sticky; top: 0; z-index: 50; background: var(--glass-strong); border-bottom: 1px solid var(--line);
@@ -62,19 +62,19 @@ a { color: inherit; }
 .btn:hover { transform: translateY(-1px); }
 .btn-primary { background: linear-gradient(135deg, var(--green), var(--green-2)); color: #fff; box-shadow: 0 10px 28px -12px rgba(24,160,88,.8), inset 0 1px 0 rgba(255,255,255,.18); }
 .btn-ghost { background: rgba(255,255,255,.04); border-color: var(--line-2); color: var(--text); }
-.btn-gold { background: var(--gold); color: #1a1400; }
+.btn-gold { background: var(--red); color: #fff; }
 @media (prefers-reduced-motion: reduce) { .btn, .reveal { transition: none !important; transform: none !important; } }
 
 /* Sections */
 section { padding: clamp(3rem, 7vw, 6rem) 0; }
-.eyebrow { display: inline-flex; align-items: center; gap: .5rem; font-size: .78rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--gold); border: 1px solid rgba(244,196,0,.35); border-radius: 999px; padding: .35rem .8rem; background: rgba(244,196,0,.06); }
+.eyebrow { display: inline-flex; align-items: center; gap: .5rem; font-size: .78rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--highlight); border: 1px solid rgba(187,29,36,.3); border-radius: 999px; padding: .35rem .8rem; background: rgba(187,29,36,.06); }
 .eyebrow::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 3px rgba(215,38,61,.25); }
 h1, h2, h3 { font-family: var(--display); line-height: 1.1; letter-spacing: -.02em; margin: 0 0 .6em; }
 h1 { font-size: clamp(2.3rem, 6.2vw, 4.6rem); font-weight: 800; }
 h2 { font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 800; }
 h3 { font-size: 1.2rem; }
 .lead { font-size: clamp(1.05rem, 2vw, 1.3rem); color: var(--muted); max-width: 60ch; }
-.accent { background: linear-gradient(90deg, var(--green) 0%, #4fd38a 50%, var(--gold) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.accent { color: var(--text); }
 .center { text-align: center; margin-inline: auto; }
 .center .lead { margin-inline: auto; }
 .hero { padding-top: clamp(3.5rem, 9vw, 7rem); }
@@ -91,7 +91,7 @@ h3 { font-size: 1.2rem; }
 .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 1000px) { .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .g2, .g3, .g4 { grid-template-columns: 1fr; } }
-.num { font-family: var(--display); font-size: 2.3rem; font-weight: 800; color: var(--gold); line-height: 1; }
+.num { font-family: var(--display); font-size: 2.3rem; font-weight: 800; color: var(--highlight); line-height: 1; }
 .muted { color: var(--muted); }
 .small { font-size: .88rem; }
 .tag { display: inline-block; font-size: .75rem; font-weight: 700; border-radius: 999px; padding: .2rem .65rem; border: 1px solid var(--line-2); color: var(--muted); }
@@ -142,7 +142,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--g
 /* Pricing */
 .price { font-family: var(--display); font-size: 2.1rem; font-weight: 800; }
 .plan { display: flex; flex-direction: column; gap: .8rem; padding: 1.6rem; }
-.plan.popular { border-color: rgba(244,196,0,.55); box-shadow: var(--shadow), 0 0 0 1px rgba(244,196,0,.35); }
+.plan.popular { border-color: rgba(0,107,63,.65); box-shadow: var(--shadow), 0 0 0 1px rgba(187,29,36,.3); }
 .plan .btn { margin-top: auto; }
 
 /* Blog */
@@ -166,13 +166,15 @@ article.prose p, article.prose li { color: var(--muted); }
 .reveal.in { opacity: 1; transform: none; }
 @media print { .site-header, .wa, .cta { display: none; } body { background: #fff; color: #000; } .glass { box-shadow: none; background: #fff; border-color: #ccc; } }
 
-/* Light theme contrast for gold and accents. */
+/* Light theme contrast for national colours and accents. */
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) .eyebrow { color: #7a5f00; border-color: rgba(122,95,0,.35); background: rgba(244,196,0,.12); }
+  :root:not([data-theme="dark"]) .eyebrow { color: #006b3f; border-color: rgba(0,107,63,.3); background: rgba(0,107,63,.06); }
   :root:not([data-theme="dark"]) .num { color: #0f7a41; }
-  :root:not([data-theme="dark"]) .accent { background: linear-gradient(90deg, #0f7a41 0%, #18a058 55%, #8a6d00 100%); -webkit-background-clip: text; background-clip: text; }
+  :root:not([data-theme="dark"]) .accent { background: linear-gradient(90deg, #0f7a41 0%, #18a058 55%, #006b3f 100%); -webkit-background-clip: text; background-clip: text; }
   :root:not([data-theme="dark"]) .tag.key { color: #b0182b; }
   :root:not([data-theme="dark"]) .icon { color: #0f7a41; }
 }
 @media (max-width: 420px) { .nav-cta .btn-primary { padding: .6rem .8rem; font-size: .9rem; } .logo small { display: none; } }
 @media (max-width: 480px) { .mock-tile { padding: .55rem; } .mock-tile b { font-size: 1.1rem; } .mock-tile span { font-size: .72rem; line-height: 1.3; display: block; } }
+
+.skip { background: var(--green-2); color: #fff; }

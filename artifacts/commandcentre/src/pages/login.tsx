@@ -56,13 +56,13 @@ export default function Login() {
         <div className="pointer-events-none absolute inset-0 opacity-[0.035] bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]" />
         <div className="relative z-10 w-full max-w-lg">
           <div className="mb-8 flex flex-col items-center text-center">
-            <div aria-label="Command Centre emblem" role="img" className="mb-5 flex h-20 w-20 items-center justify-center rounded-full border-2 border-amber-400 bg-emerald-800 text-2xl font-black tracking-tight text-amber-300 shadow-[0_0_32px_rgba(16,185,129,0.18)]">C</div>
-            <h1 className="text-3xl font-bold tracking-tight">Command<span className="text-amber-400">Centre</span></h1>
+            <div aria-label="Command Centre emblem" role="img" className="mb-5 flex h-20 w-20 items-center justify-center rounded-full kenya-emblem text-2xl font-black tracking-tight">C</div>
+            <h1 className="text-3xl font-bold tracking-tight">Command<span className="text-primary">Centre</span></h1>
             <p className="mt-3 font-mono text-xs tracking-[0.18em] text-muted-foreground">SECURE CONSTITUENCY OPERATIONS</p>
           </div>
 
           <div className="kaiti-glass relative rounded-2xl border border-emerald-800/70 bg-card/90 p-7 shadow-2xl shadow-black/30 sm:p-9">
-            <div className="absolute left-0 top-0 h-1 w-full rounded-t-xl bg-gradient-to-r from-emerald-700 via-emerald-500 to-amber-400" />
+            <div className="absolute left-0 top-0 h-1 w-full rounded-t-xl kenya-flag-band" />
             {step === "code" ? (
               <form onSubmit={handleCode} className="space-y-5">
                 <div className="space-y-2">
@@ -153,11 +153,11 @@ export default function Login() {
         </div>
       </section>
 
-      <aside className="relative hidden min-h-screen overflow-hidden bg-gradient-to-br from-emerald-950 via-card to-background lg:flex lg:items-center lg:justify-center">
+      <aside className="relative hidden min-h-screen overflow-hidden kenya-login-aside lg:flex lg:items-center lg:justify-center">
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:32px_32px]" />
         <div className="relative z-10 text-center">
           <div className="select-none text-[clamp(7rem,18vw,15rem)] font-black leading-none tracking-tighter text-emerald-400/[0.12]">C</div>
-          <div className="-mt-5 font-mono text-sm tracking-[0.3em] text-amber-400/80">CONSTITUENCY OPERATIONS SYSTEM</div>
+          <div className="-mt-5 font-mono text-sm tracking-[0.3em] text-foreground/80">CONSTITUENCY OPERATIONS SYSTEM</div>
           <div className="mt-3 space-y-2 font-mono text-xs tracking-widest text-muted-foreground/70">
             <p>[ SECURE_ACCESS ]</p>
             <p>[ ROLE_BASED_PERMISSIONS ]</p>

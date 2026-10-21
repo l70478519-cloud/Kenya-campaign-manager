@@ -70,43 +70,43 @@
   --elevate-2: rgba(255,255,255, .09);
 
   /* Background #0C0E12 */
-  --background: 150 20% 7%;
-  --foreground: 0 0% 98%;
+  --background: 150 3% 7%;
+  --foreground: 0 0% 96%;
 
-  --border: 145 25% 17%;
-  --input: 145 25% 17%;
-  --ring: 145 75% 26%;
+  --border: 150 3% 18%;
+  --input: 150 3% 18%;
+  --ring: 142 71% 29%;
 
-  --card: 150 20% 7%;
+  --card: 150 3% 10%;
   --card-foreground: 0 0% 98%;
-  --card-border: 145 25% 17%;
+  --card-border: 150 3% 18%;
 
-  --sidebar: 150 20% 7%;
+  --sidebar: 150 3% 5%;
   --sidebar-foreground: 0 0% 98%;
-  --sidebar-border: 145 25% 17%;
-  --sidebar-primary: 145 75% 26%;
+  --sidebar-border: 150 3% 18%;
+  --sidebar-primary: 142 71% 29%;
   --sidebar-primary-foreground: 0 0% 98%;
-  --sidebar-accent: 145 25% 17%;
+  --sidebar-accent: 150 3% 18%;
   --sidebar-accent-foreground: 0 0% 98%;
-  --sidebar-ring: 145 75% 26%;
+  --sidebar-ring: 142 71% 29%;
 
-  --popover: 150 20% 7%;
+  --popover: 150 3% 11%;
   --popover-foreground: 0 0% 98%;
-  --popover-border: 145 25% 17%;
+  --popover-border: 150 3% 18%;
 
-  --primary: 145 75% 26%; /* Kaiti green */
+  --primary: 142 71% 29%; /* Kenya green */
   --primary-foreground: 0 0% 98%;
 
-  --secondary: 145 25% 17%;
+  --secondary: 150 3% 18%;
   --secondary-foreground: 0 0% 98%;
 
-  --muted: 145 25% 17%;
-  --muted-foreground: 215 20.2% 65.1%;
+  --muted: 150 3% 18%;
+  --muted-foreground: 150 2% 70%;
 
-  --accent: 145 25% 17%;
+  --accent: 150 3% 18%;
   --accent-foreground: 0 0% 98%;
 
-  --destructive: 0 62.8% 30.6%;
+  --destructive: 0 72% 42%;
   --destructive-foreground: 0 0% 98%;
 
   --app-font-sans: 'Inter', 'Segoe UI', sans-serif;
@@ -173,45 +173,45 @@ table, [role="table"] {
 /* Tighten mono tracking at small sizes for readability */
 .font-mono { letter-spacing: 0.04em; }
 
-/* Kaiti campaign palette: green with gold highlights. */
-:root, .dark { --kaiti-gold: #f4c400; }
-a:focus-visible, button:focus-visible { outline-color: var(--kaiti-gold); }
+/* Kenya flag palette: charcoal, white, green and restrained red. */
+:root, .dark { --kenya-focus: #f5f5f5; }
+a:focus-visible, button:focus-visible { outline-color: var(--kenya-focus); }
 
 
-/* KaitiOS glass surface system: green/gold identity with legible dark panels. */
+/* Neutral surfaces keep Kenya flag accents clear without a heavy colour cast. */
 :root, .dark {
   --radius: 0.85rem;
-  --app-surface: rgba(17, 42, 33, 0.72);
-  --app-surface-raised: rgba(22, 56, 42, 0.80);
-  --card: 153 27% 12%;
-  --popover: 153 27% 12%;
-  --border: 145 22% 28%;
-  --card-border: 145 22% 28%;
+  --app-surface: rgba(26, 28, 27, 0.96);
+  --app-surface-raised: rgba(33, 35, 34, 0.98);
+  --card: 150 3% 11%;
+  --popover: 150 3% 11%;
+  --border: 150 3% 24%;
+  --card-border: 150 3% 24%;
 }
 body {
-  background-color: #071811;
+  background-color: #101211;
   background-image:
     radial-gradient(ellipse at 84% 5%, rgba(16, 126, 76, 0.18), transparent 42%),
-    radial-gradient(ellipse at 12% 94%, rgba(244, 196, 0, 0.055), transparent 38%);
+    radial-gradient(ellipse at 12% 94%, rgba(187, 29, 36, 0.025), transparent 38%);
   background-attachment: fixed;
 }
 .kaiti-glass,
 [data-slot="card"] {
-  background: rgba(17, 43, 32, 0.76);
-  border: 1px solid rgba(184, 220, 196, 0.16);
+  background: rgba(26, 28, 27, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.19), inset 0 1px 0 rgba(255, 255, 255, 0.035);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
 }
 .kaiti-glass-header {
-  background: rgba(12, 35, 25, 0.76);
-  border-color: rgba(184, 220, 196, 0.17);
+  background: rgba(18, 20, 19, 0.97);
+  border-color: rgba(255, 255, 255, 0.12);
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
 }
 .kaiti-glass-sidebar {
-  background: rgba(8, 30, 20, 0.91);
-  border-color: rgba(184, 220, 196, 0.16);
+  background: rgba(13, 15, 14, 0.98);
+  border-color: rgba(255, 255, 255, 0.12);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
 }
@@ -220,7 +220,7 @@ body {
   .kaiti-glass, .kaiti-glass-header, .kaiti-glass-sidebar, [data-slot="card"] {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
-    background-color: #112c20;
+    background-color: #1a1c1b;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -232,16 +232,16 @@ body {
 
 
 /* ════════════════════════════════════════════════════════════════════════════
-   KaitiOS Glass 2.0 — glassmorphic, cross-screen design layer (Batch 5)
+   Kenya theme — neutral surfaces and flag accents across screen sizes
    Applies to every page without per-page edits: panels, inputs, tables,
    buttons and the app shell. Respects reduced transparency / motion.
    ════════════════════════════════════════════════════════════════════════════ */
 :root, .dark {
-  --glass-bg: rgba(14, 38, 28, 0.52);
-  --glass-bg-strong: rgba(10, 30, 21, 0.72);
-  --glass-bg-input: rgba(4, 16, 11, 0.55);
-  --glass-border: rgba(196, 236, 210, 0.14);
-  --glass-border-strong: rgba(196, 236, 210, 0.24);
+  --glass-bg: rgba(26, 28, 27, 0.96);
+  --glass-bg-strong: rgba(20, 22, 21, 0.98);
+  --glass-bg-input: rgba(13, 15, 14, 0.92);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-border-strong: rgba(255, 255, 255, 0.22);
   --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   --glass-shadow: 0 18px 50px -18px rgba(0, 0, 0, 0.55);
   --glass-blur: 18px;
@@ -251,16 +251,16 @@ body {
   --safe-right: env(safe-area-inset-right, 0px);
 }
 
-/* Layered backdrop the glass refracts: deep green with emerald, teal and gold light. */
-html { background: #06140e; }
+/* Soft charcoal backdrop with very subtle green and red light. */
+html { background: #101211; }
 body {
-  background-color: #06140e;
+  background-color: #101211;
   background-image:
-    radial-gradient(60rem 40rem at 88% -8%, rgba(22, 163, 98, 0.30), transparent 60%),
-    radial-gradient(48rem 36rem at -10% 18%, rgba(13, 148, 136, 0.20), transparent 62%),
-    radial-gradient(40rem 30rem at 70% 110%, rgba(244, 196, 0, 0.12), transparent 60%),
-    radial-gradient(36rem 28rem at 20% 100%, rgba(16, 185, 129, 0.12), transparent 60%),
-    linear-gradient(160deg, #04110b 0%, #071a12 45%, #05120c 100%);
+    radial-gradient(60rem 40rem at 88% -8%, rgba(0, 107, 63, 0.055), transparent 60%),
+    radial-gradient(48rem 36rem at -10% 18%, rgba(255, 255, 255, 0.015), transparent 62%),
+    radial-gradient(40rem 30rem at 70% 110%, rgba(187, 29, 36, 0.035), transparent 60%),
+    radial-gradient(36rem 28rem at 20% 100%, rgba(0, 107, 63, 0.025), transparent 60%),
+    linear-gradient(160deg, #101211 0%, #151716 45%, #101211 100%);
   background-attachment: fixed;
   min-height: 100dvh;
 }
@@ -295,14 +295,14 @@ main .bg-secondary\/40 {
   box-shadow: var(--glass-highlight);
 }
 .kaiti-glass-header {
-  background: rgba(6, 22, 15, 0.55) !important;
+  background: rgba(18, 20, 19, 0.96) !important;
   border-color: var(--glass-border) !important;
   -webkit-backdrop-filter: blur(22px) saturate(150%);
   backdrop-filter: blur(22px) saturate(150%);
   padding-top: var(--safe-top);
 }
 .kaiti-glass-sidebar {
-  background: rgba(5, 20, 13, 0.62) !important;
+  background: rgba(11, 13, 12, 0.98) !important;
   border-color: var(--glass-border) !important;
   -webkit-backdrop-filter: blur(26px) saturate(150%);
   backdrop-filter: blur(26px) saturate(150%);
@@ -327,8 +327,8 @@ main input:focus-visible, main select:focus-visible, main textarea:focus-visible
 
 /* Buttons: primary actions glow softly; secondary ones are glass. */
 .bg-primary {
-  background-image: linear-gradient(135deg, hsl(145 70% 32%), hsl(152 72% 24%));
-  box-shadow: 0 8px 24px -10px hsl(145 75% 35% / 0.7), inset 0 1px 0 rgba(255,255,255,0.14);
+  background-image: linear-gradient(135deg, #15803d, #006b3f);
+  box-shadow: 0 8px 24px -10px rgba(0, 107, 63, 0.22), inset 0 1px 0 rgba(255,255,255,0.14);
 }
 main button.border, main a.border { border-radius: 0.65rem; }
 main button.border:hover, main a.border:hover { background: rgba(255, 255, 255, 0.05); }
@@ -342,7 +342,7 @@ main table tbody tr:hover { background: rgba(255, 255, 255, 0.025); }
   -webkit-backdrop-filter: blur(24px) saturate(150%);
   backdrop-filter: blur(24px) saturate(150%);
 }
-[role="dialog"] > .bg-background { background: rgba(6, 22, 15, 0.82) !important; }
+[role="dialog"] > .bg-background { background: rgba(20, 22, 21, 0.98) !important; }
 
 /* ── Cross-screen ─────────────────────────────────────────────────────────── */
 /* Phones: wide tables scroll inside themselves, never the page. */
@@ -366,12 +366,12 @@ main > div:last-child { padding-bottom: max(1rem, var(--safe-bottom)); padding-l
 
 /* Accessibility fallbacks. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .kaiti-glass, [data-slot="card"], main .bg-card { background: #0f2a1e !important; }
+  .kaiti-glass, [data-slot="card"], main .bg-card { background: #1a1c1b !important; }
 }
 @media (prefers-reduced-transparency: reduce) {
   body::before { display: none; }
   .kaiti-glass, [data-slot="card"], main .bg-card, .kaiti-glass-header, .kaiti-glass-sidebar {
-    -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: #0f2a1e !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: #1a1c1b !important;
   }
 }
 @media print {
@@ -414,4 +414,13 @@ main > div:last-child { padding-bottom: max(1rem, var(--safe-bottom)); padding-l
   main > div:last-child { padding-bottom: 5.5rem !important; }
 }
 /* The assistant sheet needs to stay readable over busy pages. */
-.kaiti-ai-panel { background: rgba(6, 22, 15, 0.95) !important; }
+.kaiti-ai-panel { background: rgba(20, 22, 21, 0.98) !important; }
+
+/* National identity accents; warning/status colours elsewhere retain their meaning. */
+.kenya-emblem { background: #101211; color: #fff; border: 2px solid #fff; box-shadow: 0 0 0 2px #006b3f; }
+.kenya-flag-band { background: linear-gradient(to bottom, #101211 0 30%, #fff 30% 35%, #bb1d24 35% 65%, #fff 65% 70%, #006b3f 70% 100%); }
+.kaiti-glass-sidebar { border-top: 3px solid #bb1d24; }
+.kaiti-glass-header { box-shadow: inset 0 2px 0 #006b3f; }
+.text-primary { color: #72d69a; }
+.bg-primary .text-primary { color: #fff; }
+.kenya-login-aside { background: linear-gradient(145deg, #101211 0 50%, #17221b 100%); border-left: 1px solid rgba(255,255,255,.12); }

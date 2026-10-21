@@ -181,7 +181,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {mobileMenuOpen && <button type="button" aria-label="Close navigation" className="fixed inset-0 z-40 bg-black/70 lg:hidden" onClick={() => setMobileMenuOpen(false)} />}
       <aside className={`${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} fixed inset-y-0 left-0 z-50 w-64 max-w-[85vw] border-r border-border bg-card kaiti-glass-sidebar flex flex-col transition-transform lg:static lg:translate-x-0 lg:shrink-0`}>
         <div className="p-4 md:p-6 flex items-center gap-3 border-b border-border">
-          <div role="img" aria-label="Command Centre logo" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-[#f4c400] bg-[#087638] text-[#f4c400] shadow-sm"><span className="text-sm font-black tracking-tight">C</span></div>
+          <div role="img" aria-label="Command Centre logo" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full kenya-emblem shadow-sm"><span className="text-sm font-black tracking-tight">C</span></div>
           <div className="flex flex-col">
             <span className="font-bold tracking-widest text-sm">COMMAND CENTRE · CAMPAIGN OPERATIONS SYSTEM</span>
             <span className="text-[10px] text-primary font-mono tracking-widest">[ SYSTEM_ACTIVE ]</span>
