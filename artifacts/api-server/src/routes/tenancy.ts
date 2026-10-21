@@ -36,6 +36,10 @@ router.post("/switch", async (req, res) => {
 });
 
 // ── Administration ───────────────────────────────────────────────────────────
+// These endpoints manage organisation-wide records; accessControl has already
+// checked admin permissions. Do not restrict their queries to the active campaign.
+router.use((_req, _res, next) => runAsSystem(() => next()));
+
 router.get("/isolation", (_req, res) => { res.json(isolationStatus()); });
 
 /** Kenya's six elective seats and the full county → constituency → ward tree. */

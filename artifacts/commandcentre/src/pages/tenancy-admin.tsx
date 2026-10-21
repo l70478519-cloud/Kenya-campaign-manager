@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Plus, UserPlus, X, ShieldOff } from "lucide-react";
 import { api, humanize } from "@/lib/records";
@@ -84,16 +84,28 @@ export default function TenancyAdmin() {
   const [edit, setEdit] = useState<Profile | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const [addUser, setAddUser] = useState("");
+  const [saving, setSaving] = useState(false);
+  const loadError = orgs.error || camps.error || users.error || geo.error;
+  useEffect(() => {
+    if (orgs.data?.length === 1) {
+      setNc(v => v.organisationId ? v : { ...v, organisationId: String(orgs.data![0].id) });
+    }
+  }, [orgs.data]);
 
   const reload = () => { void qc.invalidateQueries({ queryKey: ["t-orgs"] }); void qc.invalidateQueries({ queryKey: ["t-camps"] }); void qc.invalidateQueries({ queryKey: ["t-users"] }); void qc.invalidateQueries({ queryKey: ["tenancy-context"] }); };
   async function run(fn: () => Promise<unknown>, ok: string) {
-    setErr(""); setMsg("");
-    try { await fn(); setMsg(ok); reload(); } catch (e) { setErr((e as Error).message); }
+    setErr(""); setMsg(""); setSaving(true);
+    try { await fn(); setMsg(ok); reload(); } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
   }
 
-  const createOrg = (e: FormEvent) => { e.preventDefault(); void run(() => api("tenancy/organisations", { method: "POST", body: JSON.stringify({ name: orgName }) }).then(() => setOrgName("")), "Organisation created."); };
+  const createOrg = (e: FormEvent) => { e.preventDefault(); void run(() => api<Org>("tenancy/organisations", { method: "POST", body: JSON.stringify({ name: orgName }) }).then(created => {
+    qc.setQueryData<Org[]>(["t-orgs"], old => [...(old ?? []), { ...created, campaignCount: 0 }]);
+    setNc(v => ({ ...v, organisationId: String(created.id) }));
+    setOrgName("");
+  }), "Organisation created."); };
   const createCamp = (e: FormEvent) => {
     e.preventDefault();
+    if (!orgs.data?.some(o => String(o.id) === nc.organisationId)) { setErr("Choose an organisation, or add one in the Organisations panel first."); return; }
     void run(() => api("tenancy/campaigns", { method: "POST", body: JSON.stringify({
       organisationId: Number(nc.organisationId), name: nc.name, electionDate: nc.electionDate || null,
       seat: area.seat, areaCounty: area.county || null, areaConstituency: area.constituency || null, areaWard: area.ward || null,
@@ -111,26 +123,32 @@ export default function TenancyAdmin() {
   return <div className="space-y-6 min-w-0">
     <header><h1 className="text-2xl font-bold flex items-center gap-2"><Building2 className="text-primary" size={24} /> Organisations & campaigns</h1>
       <p className="text-sm text-muted-foreground max-w-3xl">Each campaign keeps its own records. People only see campaigns they’re members of; anyone with no memberships works in the primary campaign. Super-admins can open every campaign.</p></header>
+    {loadError && <div role="alert" className="border border-red-500/40 rounded-xl p-3 text-sm space-y-2">
+      <p>Could not load campaign setup: {(loadError as Error).message}</p>
+      <button type="button" onClick={() => { void orgs.refetch(); void camps.refetch(); void users.refetch(); void geo.refetch(); }} className={primary}>Retry loading</button>
+    </div>}
     {err && <p role="alert" className="border border-red-500/40 bg-red-950/30 rounded-xl p-3 text-red-200 text-sm">{err}</p>}
     {msg && <p role="status" className="border border-green-500/40 rounded-xl p-3 text-green-200 text-sm">{msg}</p>}
 
     <div className="grid lg:grid-cols-2 gap-4">
       <form onSubmit={createOrg} className="kaiti-glass rounded-2xl p-4 space-y-3">
         <h2 className="font-semibold">Organisations</h2>
+        {orgs.isPending && <p role="status" className="text-sm text-muted-foreground">Loading organisations…</p>}
+        {!orgs.isPending && !orgs.error && !orgs.data?.length && <p className="text-sm text-muted-foreground">No organisations yet. Enter a name below and click Add.</p>}
         <ul className="text-sm space-y-1">{orgs.data?.map(o => <li key={o.id} className="flex justify-between"><span>{o.name}</span><span className="text-muted-foreground">{o.campaignCount} campaign{o.campaignCount === 1 ? "" : "s"}</span></li>)}</ul>
         <div className="flex gap-2"><input required minLength={2} value={orgName} onChange={e => setOrgName(e.target.value)} placeholder="New organisation, e.g. a party or agency" aria-label="Organisation name" className={inputCls} />
-          <button type="submit" className={primary}><Plus size={16} /> Add</button></div>
+          <button type="submit" disabled={saving} className={primary}><Plus size={16} /> Add</button></div>
       </form>
       <form onSubmit={createCamp} className="kaiti-glass rounded-2xl p-4 space-y-3">
         <h2 className="font-semibold">New campaign</h2>
         <div className="grid sm:grid-cols-2 gap-2">
-          <label className="text-sm">Organisation<select required value={nc.organisationId} onChange={e => setNc({ ...nc, organisationId: e.target.value })} className={inputCls}><option value="">Select…</option>{orgs.data?.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
+          <label className="text-sm">Organisation<select required aria-label="Campaign organisation" disabled={orgs.isPending || !!orgs.error || !orgs.data?.length} value={nc.organisationId} onChange={e => setNc({ ...nc, organisationId: e.target.value })} className={inputCls}><option value="">{orgs.isPending ? "Loading organisations…" : orgs.error ? "Organisations unavailable — retry above" : orgs.data?.length ? "Choose organisation…" : "Add an organisation first"}</option>{orgs.data?.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
           <label className="text-sm">Campaign name<input required minLength={2} value={nc.name} onChange={e => setNc({ ...nc, name: e.target.value })} className={inputCls} /></label>
           <label className="text-sm">Election date<input type="date" value={nc.electionDate} onChange={e => setNc({ ...nc, electionDate: e.target.value })} className={inputCls} /></label>
         </div>
         <SeatPicker geo={geo.data} v={area} set={setArea} />
         <ProfileFields v={np} set={setNp} derived />
-        <button type="submit" className={primary}><Plus size={16} /> Create campaign</button>
+        <button type="submit" disabled={saving || orgs.isPending || !!orgs.error || !nc.organisationId} className={primary}><Plus size={16} /> {saving ? "Saving…" : "Create campaign"}</button>
       </form>
     </div>
 
