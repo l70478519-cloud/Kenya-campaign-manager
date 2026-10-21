@@ -1,0 +1,417 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-card-border: hsl(var(--card-border));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-popover-border: hsl(var(--popover-border));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-border: var(--primary-border);
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-secondary-border: var(--secondary-border);
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-muted-border: var(--muted-border);
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent-border: var(--accent-border);
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-destructive-border: var(--destructive-border);
+
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-primary-border: var(--sidebar-primary-border);
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-accent-border: var(--sidebar-accent-border);
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  --font-sans: var(--app-font-sans);
+  --font-serif: var(--app-font-serif);
+  --font-mono: var(--app-font-mono);
+
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+  --radius-xl: var(--radius);
+}
+
+:root, .dark {
+  --button-outline: rgba(255,255,255, .10);
+  --badge-outline: rgba(255,255,255, .05);
+
+  --opaque-button-border-intensity: 9;
+
+  --elevate-1: rgba(255,255,255, .04);
+  --elevate-2: rgba(255,255,255, .09);
+
+  /* Background #0C0E12 */
+  --background: 150 20% 7%;
+  --foreground: 0 0% 98%;
+
+  --border: 145 25% 17%;
+  --input: 145 25% 17%;
+  --ring: 145 75% 26%;
+
+  --card: 150 20% 7%;
+  --card-foreground: 0 0% 98%;
+  --card-border: 145 25% 17%;
+
+  --sidebar: 150 20% 7%;
+  --sidebar-foreground: 0 0% 98%;
+  --sidebar-border: 145 25% 17%;
+  --sidebar-primary: 145 75% 26%;
+  --sidebar-primary-foreground: 0 0% 98%;
+  --sidebar-accent: 145 25% 17%;
+  --sidebar-accent-foreground: 0 0% 98%;
+  --sidebar-ring: 145 75% 26%;
+
+  --popover: 150 20% 7%;
+  --popover-foreground: 0 0% 98%;
+  --popover-border: 145 25% 17%;
+
+  --primary: 145 75% 26%; /* Kaiti green */
+  --primary-foreground: 0 0% 98%;
+
+  --secondary: 145 25% 17%;
+  --secondary-foreground: 0 0% 98%;
+
+  --muted: 145 25% 17%;
+  --muted-foreground: 215 20.2% 65.1%;
+
+  --accent: 145 25% 17%;
+  --accent-foreground: 0 0% 98%;
+
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+
+  --app-font-sans: 'Inter', 'Segoe UI', sans-serif;
+  --app-font-serif: Georgia, serif;
+  --app-font-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
+  --radius: 0.35rem;
+
+  --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+    font-size: 100%;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    letter-spacing: 0;
+  }
+}
+
+/* Global visual system: clean dark dashboard inspired by the member registry reference. */
+:root {
+  --app-surface: #151719;
+  --app-surface-raised: #1a1d20;
+}
+body {
+  font-family: var(--app-font-sans);
+}
+h1, h2, h3, h4 {
+  font-family: var(--app-font-sans);
+  letter-spacing: -0.02em;
+}
+button, input, select, textarea {
+  font-family: inherit;
+}
+.font-mono {
+  font-family: var(--app-font-sans);
+  letter-spacing: 0.01em;
+}
+table, [role="table"] {
+  font-variant-numeric: tabular-nums;
+}
+::selection {
+  background: hsl(var(--primary) / 0.28);
+}
+
+/* Scale up hardcoded tiny px classes used throughout the UI */
+.text-\[8px\]  { font-size: 0.7rem !important;  line-height: 1.5 !important; }
+.text-\[9px\]  { font-size: 0.75rem !important; line-height: 1.5 !important; }
+.text-\[10px\] { font-size: 0.8rem !important;  line-height: 1.5 !important; }
+
+/* Tighten mono tracking at small sizes for readability */
+.font-mono { letter-spacing: 0.04em; }
+
+/* Kaiti campaign palette: green with gold highlights. */
+:root, .dark { --kaiti-gold: #f4c400; }
+a:focus-visible, button:focus-visible { outline-color: var(--kaiti-gold); }
+
+
+/* KaitiOS glass surface system: green/gold identity with legible dark panels. */
+:root, .dark {
+  --radius: 0.85rem;
+  --app-surface: rgba(17, 42, 33, 0.72);
+  --app-surface-raised: rgba(22, 56, 42, 0.80);
+  --card: 153 27% 12%;
+  --popover: 153 27% 12%;
+  --border: 145 22% 28%;
+  --card-border: 145 22% 28%;
+}
+body {
+  background-color: #071811;
+  background-image:
+    radial-gradient(ellipse at 84% 5%, rgba(16, 126, 76, 0.18), transparent 42%),
+    radial-gradient(ellipse at 12% 94%, rgba(244, 196, 0, 0.055), transparent 38%);
+  background-attachment: fixed;
+}
+.kaiti-glass,
+[data-slot="card"] {
+  background: rgba(17, 43, 32, 0.76);
+  border: 1px solid rgba(184, 220, 196, 0.16);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.19), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.kaiti-glass-header {
+  background: rgba(12, 35, 25, 0.76);
+  border-color: rgba(184, 220, 196, 0.17);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+.kaiti-glass-sidebar {
+  background: rgba(8, 30, 20, 0.91);
+  border-color: rgba(184, 220, 196, 0.16);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+}
+.kaiti-glass [role="table"], .kaiti-glass table { background: transparent; }
+@media (prefers-reduced-transparency: reduce) {
+  .kaiti-glass, .kaiti-glass-header, .kaiti-glass-sidebar, [data-slot="card"] {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-color: #112c20;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kaiti-glass *, .kaiti-glass-header *, .kaiti-glass-sidebar * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   KaitiOS Glass 2.0 — glassmorphic, cross-screen design layer (Batch 5)
+   Applies to every page without per-page edits: panels, inputs, tables,
+   buttons and the app shell. Respects reduced transparency / motion.
+   ════════════════════════════════════════════════════════════════════════════ */
+:root, .dark {
+  --glass-bg: rgba(14, 38, 28, 0.52);
+  --glass-bg-strong: rgba(10, 30, 21, 0.72);
+  --glass-bg-input: rgba(4, 16, 11, 0.55);
+  --glass-border: rgba(196, 236, 210, 0.14);
+  --glass-border-strong: rgba(196, 236, 210, 0.24);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --glass-shadow: 0 18px 50px -18px rgba(0, 0, 0, 0.55);
+  --glass-blur: 18px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+/* Layered backdrop the glass refracts: deep green with emerald, teal and gold light. */
+html { background: #06140e; }
+body {
+  background-color: #06140e;
+  background-image:
+    radial-gradient(60rem 40rem at 88% -8%, rgba(22, 163, 98, 0.30), transparent 60%),
+    radial-gradient(48rem 36rem at -10% 18%, rgba(13, 148, 136, 0.20), transparent 62%),
+    radial-gradient(40rem 30rem at 70% 110%, rgba(244, 196, 0, 0.12), transparent 60%),
+    radial-gradient(36rem 28rem at 20% 100%, rgba(16, 185, 129, 0.12), transparent 60%),
+    linear-gradient(160deg, #04110b 0%, #071a12 45%, #05120c 100%);
+  background-attachment: fixed;
+  min-height: 100dvh;
+}
+/* Faint grid that gives the glass something to blur. */
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image: linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse at 50% 30%, black 20%, transparent 75%);
+}
+#root { position: relative; z-index: 1; }
+.kaiti-shell { background: transparent !important; }
+
+/* Panels: every card-like surface becomes frosted glass with soft corners. */
+.kaiti-glass,
+[data-slot="card"],
+main .bg-card,
+main .bg-card\/50,
+main .bg-card\/90,
+main .bg-secondary\/40 {
+  background: var(--glass-bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: calc(var(--radius) + 0.15rem);
+  box-shadow: var(--glass-shadow), var(--glass-highlight);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+}
+/* Nested panels don't stack blur (expensive on phones); they get a tint instead. */
+.kaiti-glass .kaiti-glass, .kaiti-glass .bg-card, main .bg-card .bg-card {
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  background: rgba(255, 255, 255, 0.03) !important;
+  box-shadow: var(--glass-highlight);
+}
+.kaiti-glass-header {
+  background: rgba(6, 22, 15, 0.55) !important;
+  border-color: var(--glass-border) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(150%);
+  padding-top: var(--safe-top);
+}
+.kaiti-glass-sidebar {
+  background: rgba(5, 20, 13, 0.62) !important;
+  border-color: var(--glass-border) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+  backdrop-filter: blur(26px) saturate(150%);
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+}
+
+/* Form controls: dark frosted wells with a clear focus ring. */
+main input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+main select, main textarea,
+.bg-background.border {
+  background-color: var(--glass-bg-input) !important;
+  border-color: var(--glass-border-strong) !important;
+  border-radius: 0.65rem;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+main input:focus-visible, main select:focus-visible, main textarea:focus-visible {
+  outline: none;
+  border-color: hsl(var(--primary)) !important;
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.28);
+}
+
+/* Buttons: primary actions glow softly; secondary ones are glass. */
+.bg-primary {
+  background-image: linear-gradient(135deg, hsl(145 70% 32%), hsl(152 72% 24%));
+  box-shadow: 0 8px 24px -10px hsl(145 75% 35% / 0.7), inset 0 1px 0 rgba(255,255,255,0.14);
+}
+main button.border, main a.border { border-radius: 0.65rem; }
+main button.border:hover, main a.border:hover { background: rgba(255, 255, 255, 0.05); }
+
+/* Tables read on glass. */
+main table thead th { background: rgba(255, 255, 255, 0.03); }
+main table tbody tr:hover { background: rgba(255, 255, 255, 0.025); }
+
+/* Dialogs, popovers, menus. */
+[role="dialog"] > div, [data-radix-popper-content-wrapper] > div, [role="menu"], [role="listbox"] {
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+}
+[role="dialog"] > .bg-background { background: rgba(6, 22, 15, 0.82) !important; }
+
+/* ── Cross-screen ─────────────────────────────────────────────────────────── */
+/* Phones: wide tables scroll inside themselves, never the page. */
+@media (max-width: 767px) {
+  main table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  main h1 { font-size: 1.4rem; line-height: 1.25; }
+  /* 16px inputs stop iOS from zooming the page on focus. */
+  main input, main select, main textarea { font-size: 16px !important; }
+  :root, .dark { --glass-blur: 12px; }
+}
+/* Touch screens: comfortable tap targets. */
+@media (pointer: coarse) {
+  main button, main select, main a[role="button"], nav a { min-height: 40px; }
+}
+/* Large screens: keep line lengths readable. */
+@media (min-width: 1800px) {
+  main > div { max-width: 1680px; margin-inline: auto; }
+}
+/* Respect the notch / home indicator when installed as an app. */
+main > div:last-child { padding-bottom: max(1rem, var(--safe-bottom)); padding-left: max(0.75rem, var(--safe-left)); padding-right: max(0.75rem, var(--safe-right)); }
+
+/* Accessibility fallbacks. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .kaiti-glass, [data-slot="card"], main .bg-card { background: #0f2a1e !important; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  body::before { display: none; }
+  .kaiti-glass, [data-slot="card"], main .bg-card, .kaiti-glass-header, .kaiti-glass-sidebar {
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: #0f2a1e !important;
+  }
+}
+@media print {
+  body { background: #fff !important; color: #000 !important; }
+  body::before { display: none; }
+  .kaiti-glass-sidebar, .kaiti-glass-header { display: none !important; }
+  .kaiti-glass, main .bg-card { background: #fff !important; box-shadow: none !important; border-color: #ccc !important; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+/* Header: square edges, compact campaign switcher on phones. */
+.kaiti-glass-header { border-radius: 0 !important; }
+@media (max-width: 767px) {
+  main header select { font-size: 14px !important; max-width: 38vw; min-height: 36px; }
+  main table th, main table td { white-space: nowrap; }
+  main .overflow-x-auto > table, main .overflow-auto > table { display: table; }
+}
+
+/* ── Phone layout fixes applied to every page (Batch 7) ───────────────────── */
+@media (max-width: 767px) {
+  /* Tab bars scroll sideways instead of squashing labels. */
+  main .flex.border-b { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  main .flex.border-b::-webkit-scrollbar { display: none; }
+  main .flex.border-b > button, main .flex.border-b > a { flex-shrink: 0; white-space: nowrap; }
+  /* Page headers wrap their action buttons under the title. */
+  main .flex.items-center.justify-between, main .flex.items-start.justify-between { flex-wrap: wrap; gap: 0.5rem; }
+  /* Pages that add their own padding inside the shell's padding. */
+  main .p-6 { padding: 0.75rem !important; }
+  main .px-6 { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+  /* Stat tiles: keep labels readable instead of clipping. */
+  main [class*="grid-cols-"] > div { min-width: 0; }
+  main [class*="grid-cols-"] > div p, main [class*="grid-cols-"] > div span { overflow-wrap: anywhere; }
+  main h1.tracking-widest { letter-spacing: 0.06em; }
+}
+/* AI Assist: round button above the home indicator; bottom sheet on phones. */
+.kaiti-ai-trigger { bottom: max(0.75rem, env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 640px) { .kaiti-ai-trigger { bottom: 1.5rem; } }
+.kaiti-ai-panel { padding-bottom: env(safe-area-inset-bottom, 0px); }
+@media (max-width: 767px) {
+  /* Keep the last content on each page clear of the AI button. */
+  main > div:last-child { padding-bottom: 5.5rem !important; }
+}
+/* The assistant sheet needs to stay readable over busy pages. */
+.kaiti-ai-panel { background: rgba(6, 22, 15, 0.95) !important; }

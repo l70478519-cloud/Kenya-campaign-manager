@@ -1,62 +1,41 @@
-# Kenya Campaign Manager
+# Campaign Command Centre — Kenya
 
-A working campaign operations application inspired by the public Campaigns Master feature catalogue, with an original responsive interface. Plain JavaScript, CSS and Python 3.12; no npm install, build step or third-party runtime packages.
+A campaign operations platform for every Kenyan elective seat — President, Governor, Senator,
+Woman Representative, MP and MCA — with Kenya's 47 counties, 290 constituencies and 1,450 wards
+built in, plus a marketing website.
 
-## Run
+## What's inside
+- `artifacts/api-server` — API (Express, PostgreSQL/Supabase, row-level campaign isolation)
+- `artifacts/commandcentre` — the app (React, glass UI, phone/tablet/desktop, installable)
+- `artifacts/website` — marketing site (static; served at `/` when `SITE_AT_ROOT=true`)
+- `lib/db` — database schema; `docs/templates` — IEBC import templates
 
-```bash
-export ADMIN_EMAIL='you@example.com'
-export ADMIN_PASSWORD='replace-with-a-long-unique-password'
-python3 server.py
+## Modules
+Voter & supporter database, segmentation, SMS/WhatsApp/email, field operations, volunteers,
+events and itinerary, surveys and polls, intelligence dashboards, path to victory and SWOT,
+social listening, rapid response, AI assistant, speeches and manifesto, credentials,
+nominations, fundraising (M-Pesa), budgets and expenses, election-day command and tallies,
+multi-campaign organisations, two-factor sign-in, audit and data-rights tools.
+
+## Setup
+See `DEPLOY_RENDER.md`. Every campaign starts by choosing its seat and area; the platform
+loads the right wards and every module uses them.
+
+Electoral boundaries: open compilation of IEBC 2022 boundaries (MIT), corrected against
+official records. Confirm against the current IEBC gazette for legal filings.
+
+## Combined repository layout
+
+The uploaded React/Express/PostgreSQL project is now the primary application at the repository root. It supersedes the original Python runtime for Render deployment. The previous implementation, including its original interface and tests, is preserved under `starter/` as a standalone reference. It is not a second production service and does not share the PostgreSQL database. No pre-existing records were migrated; the repository previously contained source only.
+
+Use the root `render.yaml`, not `starter/Dockerfile`. Do not deploy the starter for the Supabase-backed application. Secrets belong in Render environment settings, never in GitHub. See `.env.example` for variable names and `DEPLOY_RENDER.md` for setup. Database/provider-dependent workflows must still be verified after deployment; the existence of a module does not establish a live integration.
+
+## Local checks
+
+```sh
+pnpm install --frozen-lockfile
+pnpm test
+PORT=10000 BASE_PATH=/ NODE_ENV=production pnpm run build:production
 ```
 
-Open http://localhost:8000 and sign in using those environment values. The admin account is created on the first run only. No default password, fake statistics or seeded real aspirants. Create campaigns from the dashboard. Data persists in `data/campaigns.db`; back it up with SQLite's backup API or while the server is stopped.
-
-## Included
-
-- Separate aspirant workspaces for President, Governor, Senator, Woman Representative, constituency MP and ward MCA. President/Governor running mates belong to their ticket, not separate ballot offices.
-- All 47 counties. Required constituency/ward fields for the applicable seats; these names are manually entered, not a verified national boundary registry.
-- Workspace selector, overview metrics calculated from saved records, budget overview and campaign search.
-- Create, read, edit, delete and search tasks, events, volunteers, field reports, finance entries, message drafts, nomination checklists and document links.
-- Kenyan mobile normalization; KES accounting; date-only activity planning; UTC audit timestamps clearly labelled.
-- JSON exports of the selected module or workspace records.
-- Password hashing, expiring HttpOnly sessions, campaign-scoped authorization and audit records.
-- Responsive navigation, keyboard-accessible dialogs and forms, empty states and server validation.
-
-This supports aspirants for every seat; it does **not** claim to contain a current national directory of real aspirants. Import or enter verified aspirant data separately.
-
-## Team access
-
-Use the offline administration command on your server; get campaign IDs from a campaigns JSON export:
-
-```bash
-python3 manage.py colleague@example.com --name 'Colleague' --role manager --campaign CAMPAIGN_ID
-```
-
-Roles: admin has organisation-wide access and creates campaigns; manager handles assigned campaigns including finance and drafts; officer can manage assigned operational records, excluding finance/messages; viewer is read-only. Only admin/manager can read audit records. Repeat `--campaign` for multiple assignments. Password is entered interactively. Team account creation is CLI-based in this version.
-
-## Deployment
-
-The included Render blueprint uses Docker and a paid persistent disk. Set the two admin variables when provisioning. `SECURE_COOKIES=1` requires HTTPS; terminate TLS at a reverse proxy. Mount persistent storage at `/data` for other Docker hosts. Never expose the development HTTP server directly to the internet: use a managed HTTPS reverse proxy, request throttling and a restricted origin. Run one application instance with this SQLite configuration. A cPanel host must support Python applications or Docker; this is not a Node Passenger app.
-
-## Honest integration boundaries
-
-SMS/email/WhatsApp remain drafts; no provider is connected and no delivery receipts are fabricated. Finance entries are bookkeeping, not M-Pesa charges or bank verification. Documents are external links, not file uploads. Nomination status is an internal checklist, not an IEBC eligibility decision. There is no live GIS, electoral results ingestion, social feed, opinion-poll platform, AI generation, automated targeting, offline sync, payment gateway or provider scheduling. These require separate verified data feeds/integrations. The reference's private dashboard was not accessible; this is not a pixel-identical recreation of private screens.
-
-Before handling production personal data, configure hosting protections, backups, retention and access processes. The app does not infer ethnicity, political preference or vote choice. Volunteer records are operational team records.
-
-## Validation
-
-```bash
-python3 -m unittest discover -s tests -v
-node --check public/app.js
-```
-
-Tests cover sign-in, all six seat types, required geography, CRUD persistence, negative finance validation, forced draft status, campaign isolation, viewer permissions, audit generation and logout. CI repeats these on pushes and PRs.
-
-## Sources
-
-- https://campaignsmaster.com/features — public feature catalogue used for workflow inspiration.
-- https://www.iebc.or.ke/uploads/resources/wNa7w1TbBm.pdf — elective positions and electoral scope.
-
-© Kenya Campaign Manager. Powered by 1Dev.co.
+The acceptance checks include source-level regression assertions; they do not substitute for live PostgreSQL tenant-isolation and provider tests. The imported code retains internal `kaiti_*` table names for compatibility; these are not a restriction to Kaiti. Operational areas come from each campaign profile.

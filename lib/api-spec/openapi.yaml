@@ -1,0 +1,3602 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: CommandCentre OS API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+  - name: dashboard
+  - name: members
+  - name: segments
+  - name: messaging
+  - name: field-ops
+  - name: volunteers
+  - name: surveys
+  - name: events
+  - name: intelligence
+  - name: campaign-plan
+  - name: kol
+  - name: insights
+  - name: social
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ─── Dashboard ────────────────────────────────────────────────────────────
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Campaign overview stats
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/activity:
+    get:
+      operationId: getDashboardActivity
+      tags: [dashboard]
+      summary: Recent campaign activity feed
+      responses:
+        "200":
+          description: Activity list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+  # ─── Members ──────────────────────────────────────────────────────────────
+  /members:
+    get:
+      operationId: listMembers
+      tags: [members]
+      summary: List campaign members/contacts
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: ward
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer }
+        - name: limit
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Members list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemberList"
+    post:
+      operationId: createMember
+      tags: [members]
+      summary: Add a new member/contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+
+  /members/{id}:
+    get:
+      operationId: getMember
+      tags: [members]
+      summary: Get member details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+    patch:
+      operationId: updateMember
+      tags: [members]
+      summary: Update a member
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+    delete:
+      operationId: deleteMember
+      tags: [members]
+      summary: Delete a member
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /members/stats:
+    get:
+      operationId: getMemberStats
+      tags: [members]
+      summary: Member database statistics
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemberStats"
+
+  # ─── Audience Segments ────────────────────────────────────────────────────
+  /segments:
+    get:
+      operationId: listSegments
+      tags: [segments]
+      summary: List audience segments
+      responses:
+        "200":
+          description: Segments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Segment"
+    post:
+      operationId: createSegment
+      tags: [segments]
+      summary: Create an audience segment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SegmentInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Segment"
+
+  /segments/{id}:
+    get:
+      operationId: getSegment
+      tags: [segments]
+      summary: Get segment details + member count
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Segment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Segment"
+    patch:
+      operationId: updateSegment
+      tags: [segments]
+      summary: Update a segment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SegmentUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Segment"
+    delete:
+      operationId: deleteSegment
+      tags: [segments]
+      summary: Delete a segment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── Messaging Campaigns ──────────────────────────────────────────────────
+  /messages:
+    get:
+      operationId: listCampaigns
+      tags: [messaging]
+      summary: List messaging campaigns
+      parameters:
+        - name: channel
+          in: query
+          schema: { type: string, enum: [sms, whatsapp, email] }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Campaigns
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MessageCampaign"
+    post:
+      operationId: createCampaign
+      tags: [messaging]
+      summary: Create a messaging campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageCampaignInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageCampaign"
+
+  /messages/{id}:
+    get:
+      operationId: getCampaign
+      tags: [messaging]
+      summary: Get campaign details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageCampaign"
+    patch:
+      operationId: updateCampaign
+      tags: [messaging]
+      summary: Update a campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageCampaignUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageCampaign"
+    delete:
+      operationId: deleteCampaign
+      tags: [messaging]
+      summary: Delete a campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /messages/{id}/send:
+    post:
+      operationId: sendCampaign
+      tags: [messaging]
+      summary: Send / schedule a campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageCampaign"
+
+  /messages/stats:
+    get:
+      operationId: getMessagingStats
+      tags: [messaging]
+      summary: Overall messaging delivery stats
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessagingStats"
+
+  # ─── Field Operations ─────────────────────────────────────────────────────
+  /field-ops/sessions:
+    get:
+      operationId: listCanvassSessions
+      tags: [field-ops]
+      summary: List canvass sessions
+      parameters:
+        - name: ward
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CanvassSession"
+    post:
+      operationId: createCanvassSession
+      tags: [field-ops]
+      summary: Create a new canvass session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CanvassSessionInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CanvassSession"
+
+  /field-ops/sessions/{id}:
+    get:
+      operationId: getCanvassSession
+      tags: [field-ops]
+      summary: Get canvass session details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CanvassSession"
+
+  /field-ops/visits:
+    get:
+      operationId: listCanvassVisits
+      tags: [field-ops]
+      summary: List door-knock visit logs
+      parameters:
+        - name: sessionId
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Visits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CanvassVisit"
+    post:
+      operationId: logCanvassVisit
+      tags: [field-ops]
+      summary: Log a door-knock visit outcome
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CanvassVisitInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CanvassVisit"
+
+  /field-ops/coverage:
+    get:
+      operationId: getFieldCoverage
+      tags: [field-ops]
+      summary: Ward coverage overview
+      responses:
+        "200":
+          description: Coverage by ward
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WardCoverage"
+
+  # ─── Volunteers ───────────────────────────────────────────────────────────
+  /volunteers:
+    get:
+      operationId: listVolunteers
+      tags: [volunteers]
+      summary: List volunteers
+      parameters:
+        - name: ward
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Volunteers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Volunteer"
+    post:
+      operationId: createVolunteer
+      tags: [volunteers]
+      summary: Add a volunteer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VolunteerInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Volunteer"
+
+  /volunteers/register:
+    post:
+      operationId: registerVolunteer
+      tags: [volunteers]
+      summary: Public volunteer self-registration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VolunteerRegistration"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Volunteer"
+
+  /volunteers/{id}:
+    get:
+      operationId: getVolunteer
+      tags: [volunteers]
+      summary: Get volunteer details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Volunteer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Volunteer"
+    patch:
+      operationId: updateVolunteer
+      tags: [volunteers]
+      summary: Update a volunteer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VolunteerUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Volunteer"
+
+  /volunteers/assignments:
+    get:
+      operationId: listVolunteerAssignments
+      tags: [volunteers]
+      summary: List volunteer ward assignments
+      responses:
+        "200":
+          description: Assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VolunteerAssignment"
+    post:
+      operationId: createVolunteerAssignment
+      tags: [volunteers]
+      summary: Assign volunteer to a ward
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VolunteerAssignmentInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VolunteerAssignment"
+
+  # ─── Surveys ──────────────────────────────────────────────────────────────
+  /surveys:
+    get:
+      operationId: listSurveys
+      tags: [surveys]
+      summary: List surveys
+      responses:
+        "200":
+          description: Surveys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Survey"
+    post:
+      operationId: createSurvey
+      tags: [surveys]
+      summary: Create a survey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveyInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Survey"
+
+  /surveys/{id}:
+    get:
+      operationId: getSurvey
+      tags: [surveys]
+      summary: Get survey with questions
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Survey
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Survey"
+
+  /surveys/{id}/responses:
+    get:
+      operationId: getSurveyResponses
+      tags: [surveys]
+      summary: Get survey responses
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Responses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SurveyResponse"
+    post:
+      operationId: submitSurveyResponse
+      tags: [surveys]
+      summary: Submit a survey response
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SurveyResponseInput"
+      responses:
+        "201":
+          description: Submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SurveyResponse"
+
+  # ─── Events ───────────────────────────────────────────────────────────────
+  /events:
+    get:
+      operationId: listEvents
+      tags: [events]
+      summary: List campaign events
+      parameters:
+        - name: upcoming
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CampaignEvent"
+    post:
+      operationId: createEvent
+      tags: [events]
+      summary: Create an event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignEventInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignEvent"
+
+  /events/{id}:
+    get:
+      operationId: getEvent
+      tags: [events]
+      summary: Get event details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignEvent"
+    patch:
+      operationId: updateEvent
+      tags: [events]
+      summary: Update an event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CampaignEventUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignEvent"
+    delete:
+      operationId: deleteEvent
+      tags: [events]
+      summary: Delete an event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── Insights (Opinion Polling) ──────────────────────────────────────────
+  /insights/polls:
+    get:
+      operationId: listInsightPolls
+      tags: [insights]
+      summary: List all insight polls
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Polls list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InsightPoll"
+    post:
+      operationId: createInsightPoll
+      tags: [insights]
+      summary: Create a new poll
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InsightPollInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsightPoll"
+
+  /insights/polls/{id}:
+    get:
+      operationId: getInsightPoll
+      tags: [insights]
+      summary: Get poll details with questions
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Poll
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsightPoll"
+    patch:
+      operationId: updateInsightPoll
+      tags: [insights]
+      summary: Update a poll
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InsightPollUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsightPoll"
+    delete:
+      operationId: deleteInsightPoll
+      tags: [insights]
+      summary: Delete a poll
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /insights/polls/{id}/publish:
+    post:
+      operationId: publishInsightPoll
+      tags: [insights]
+      summary: Publish a poll and generate share token
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Published
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsightPoll"
+
+  /insights/polls/{id}/questions:
+    get:
+      operationId: listInsightQuestions
+      tags: [insights]
+      summary: List questions for a poll
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Questions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InsightQuestion"
+    post:
+      operationId: createInsightQuestion
+      tags: [insights]
+      summary: Add a question to a poll
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InsightQuestionInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsightQuestion"
+
+  /insights/polls/{id}/questions/{qid}:
+    patch:
+      operationId: updateInsightQuestion
+      tags: [insights]
+      summary: Update a question
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: qid
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InsightQuestionUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsightQuestion"
+    delete:
+      operationId: deleteInsightQuestion
+      tags: [insights]
+      summary: Delete a question
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: qid
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /insights/polls/{id}/results:
+    get:
+      operationId: loadInsightResults
+      tags: [insights]
+      summary: Get aggregated poll results
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsightResults"
+
+  /insights/polls/{id}/responses:
+    get:
+      operationId: loadInsightResponses
+      tags: [insights]
+      summary: List raw responses for a poll
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Responses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InsightResponse"
+
+  /insights/polls/{id}/ai-summary:
+    post:
+      operationId: generateInsightAiSummary
+      tags: [insights]
+      summary: Generate GPT-4 AI summary for poll results
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: AI Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsightAiSummary"
+    get:
+      operationId: getInsightAiSummary
+      tags: [insights]
+      summary: Get cached AI summary for a poll
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: AI Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsightAiSummary"
+
+  /insights/polls/{id}/questions/{qid}/sentiment:
+    post:
+      operationId: analyzeInsightSentiment
+      tags: [insights]
+      summary: Run GPT-4 sentiment analysis on open-ended answers
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: qid
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Sentiment analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsightAiSummary"
+
+  /insights/polls/{id}/trend:
+    get:
+      operationId: loadInsightTrend
+      tags: [insights]
+      summary: Get trend data for recurring questions
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Trend data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsightTrendData"
+
+  /insights/p/{shareToken}:
+    get:
+      operationId: getPublicPoll
+      tags: [insights]
+      summary: Get public poll by share token (no auth required)
+      parameters:
+        - name: shareToken
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Public poll view
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsightPollPublicView"
+
+  /insights/p/{shareToken}/event:
+    post:
+      operationId: recordInsightShareEvent
+      tags: [insights]
+      summary: Record a funnel engagement event (public, no auth)
+      parameters:
+        - name: shareToken
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InsightShareEventInput"
+      responses:
+        "204":
+          description: Recorded
+
+  /insights/polls/{id}/distribution:
+    get:
+      operationId: loadInsightDistribution
+      tags: [insights]
+      summary: Get sharing & distribution funnel analytics for a poll
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Distribution analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsightDistribution"
+
+  /insights/p/{shareToken}/submit:
+    post:
+      operationId: submitInsightResponse
+      tags: [insights]
+      summary: Submit a poll response (public, no auth)
+      parameters:
+        - name: shareToken
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InsightSubmitInput"
+      responses:
+        "201":
+          description: Submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InsightResponse"
+
+  # ─── Campaign Intelligence ────────────────────────────────────────────────
+  /intelligence/mentions:
+    get:
+      operationId: listNarrativeMentions
+      tags: [intelligence]
+      summary: List narrative/social mentions
+      parameters:
+        - name: threatLevel
+          in: query
+          schema: { type: string, enum: [low, medium, high, critical] }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Mentions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NarrativeMention"
+    post:
+      operationId: createNarrativeMention
+      tags: [intelligence]
+      summary: Log a narrative mention
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NarrativeMentionInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NarrativeMention"
+
+  /intelligence/mentions/{id}/respond:
+    post:
+      operationId: respondToMention
+      tags: [intelligence]
+      summary: Mark mention as responded with counter-narrative
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MentionResponseInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NarrativeMention"
+
+  /intelligence/competitors:
+    get:
+      operationId: listCompetitors
+      tags: [intelligence]
+      summary: List tracked competitors
+      responses:
+        "200":
+          description: Competitors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Competitor"
+    post:
+      operationId: createCompetitor
+      tags: [intelligence]
+      summary: Add a competitor to track
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompetitorInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Competitor"
+
+  /intelligence/briefs:
+    get:
+      operationId: listWarRoomBriefs
+      tags: [intelligence]
+      summary: List AI war-room intelligence briefs
+      responses:
+        "200":
+          description: Briefs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WarRoomBrief"
+    post:
+      operationId: createWarRoomBrief
+      tags: [intelligence]
+      summary: Create an intelligence brief
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WarRoomBriefInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WarRoomBrief"
+
+  /intelligence/narrative-score:
+    get:
+      operationId: getNarrativeScore
+      tags: [intelligence]
+      summary: Current narrative health score
+      responses:
+        "200":
+          description: Score
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NarrativeScore"
+
+  # ─── Campaign Plan ────────────────────────────────────────────────────────
+  /campaign-plan/milestones:
+    get:
+      operationId: listMilestones
+      tags: [campaign-plan]
+      summary: List campaign milestones
+      responses:
+        "200":
+          description: Milestones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Milestone"
+    post:
+      operationId: createMilestone
+      tags: [campaign-plan]
+      summary: Create a milestone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MilestoneInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Milestone"
+
+  /campaign-plan/milestones/{id}:
+    patch:
+      operationId: updateMilestone
+      tags: [campaign-plan]
+      summary: Update milestone status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MilestoneUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Milestone"
+    delete:
+      operationId: deleteMilestone
+      tags: [campaign-plan]
+      summary: Delete a milestone
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /campaign-plan/readiness:
+    get:
+      operationId: getReadinessScore
+      tags: [campaign-plan]
+      summary: Overall campaign readiness score
+      responses:
+        "200":
+          description: Readiness
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessScore"
+
+  /campaign-plan/countdown:
+    get:
+      operationId: getElectionCountdown
+      tags: [campaign-plan]
+      summary: Days until election day
+      responses:
+        "200":
+          description: Countdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElectionCountdown"
+    post:
+      operationId: setElectionDate
+      tags: [campaign-plan]
+      summary: Set election date
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ElectionDateInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElectionCountdown"
+
+  # ─── KOL / Influencer ─────────────────────────────────────────────────────
+  /kol:
+    get:
+      operationId: listKOLs
+      tags: [kol]
+      summary: List key opinion leaders
+      parameters:
+        - name: tier
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: KOLs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KOL"
+    post:
+      operationId: createKOL
+      tags: [kol]
+      summary: Add a KOL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KOLInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KOL"
+
+  /kol/{id}:
+    patch:
+      operationId: updateKOL
+      tags: [kol]
+      summary: Update KOL score / status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KOLUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KOL"
+
+  /kol/leaderboard:
+    get:
+      operationId: getKOLLeaderboard
+      tags: [kol]
+      summary: Top KOLs ranked by influence score
+      responses:
+        "200":
+          description: Leaderboard
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KOL"
+
+  # ─── Fundraising ──────────────────────────────────────────────────────────
+  /fundraising/summary:
+    get:
+      operationId: getFundraisingSummary
+      tags: [fundraising]
+      summary: Overall fundraising stats
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FundraisingSummary"
+
+  /fundraising/campaigns:
+    get:
+      operationId: listFundraisingCampaigns
+      tags: [fundraising]
+      summary: List fundraising campaigns
+      responses:
+        "200":
+          description: Campaigns
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FundraisingCampaign"
+    post:
+      operationId: createFundraisingCampaign
+      tags: [fundraising]
+      summary: Create a fundraising campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FundraisingCampaignInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FundraisingCampaign"
+
+  /fundraising/campaigns/{id}:
+    get:
+      operationId: getFundraisingCampaign
+      tags: [fundraising]
+      summary: Get a campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Campaign
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FundraisingCampaign"
+    patch:
+      operationId: updateFundraisingCampaign
+      tags: [fundraising]
+      summary: Update a campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FundraisingCampaignUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FundraisingCampaign"
+    delete:
+      operationId: deleteFundraisingCampaign
+      tags: [fundraising]
+      summary: Delete a campaign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /fundraising/donations:
+    get:
+      operationId: listDonations
+      tags: [fundraising]
+      summary: List donations
+      parameters:
+        - name: campaignId
+          in: query
+          schema: { type: integer }
+        - name: donorId
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Donations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Donation"
+    post:
+      operationId: createDonation
+      tags: [fundraising]
+      summary: Log a donation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DonationInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Donation"
+
+  /fundraising/donations/{id}:
+    delete:
+      operationId: deleteDonation
+      tags: [fundraising]
+      summary: Delete a donation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /fundraising/donations/{id}/reconcile:
+    patch:
+      operationId: reconcileDonation
+      tags: [fundraising]
+      summary: Mark donation as reconciled
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReconcileDonationInput" }
+      responses:
+        "200":
+          description: Reconciled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Donation" }
+
+  /fundraising/donors:
+    get:
+      operationId: listDonors
+      tags: [fundraising]
+      summary: List donors
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: ward
+          in: query
+          schema: { type: string }
+        - name: tier
+          in: query
+          schema: { type: string }
+        - name: type
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Donors
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Donor" }
+    post:
+      operationId: createDonor
+      tags: [fundraising]
+      summary: Add a donor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DonorInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Donor" }
+
+  /fundraising/donors/{id}:
+    patch:
+      operationId: updateDonor
+      tags: [fundraising]
+      summary: Update donor
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DonorUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Donor" }
+    delete:
+      operationId: deleteDonor
+      tags: [fundraising]
+      summary: Delete donor
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /fundraising/pledges:
+    get:
+      operationId: listPledges
+      tags: [fundraising]
+      summary: List pledges
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: campaignId
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Pledges
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Pledge" }
+    post:
+      operationId: createPledge
+      tags: [fundraising]
+      summary: Record a pledge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PledgeInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Pledge" }
+
+  /fundraising/pledges/{id}:
+    patch:
+      operationId: updatePledge
+      tags: [fundraising]
+      summary: Update pledge status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PledgeUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Pledge" }
+    delete:
+      operationId: deletePledge
+      tags: [fundraising]
+      summary: Delete pledge
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /fundraising/pipeline:
+    get:
+      operationId: getFundraisingPipeline
+      tags: [fundraising]
+      summary: Fundraising pipeline analytics
+      responses:
+        "200":
+          description: Pipeline
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FundraisingPipeline" }
+
+  /fundraising/reconciliation:
+    get:
+      operationId: getFundraisingReconciliation
+      tags: [fundraising]
+      summary: Reconciliation summary
+      responses:
+        "200":
+          description: Reconciliation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReconciliationSummary" }
+
+  /fundraising/insights:
+    get:
+      operationId: getFundraisingInsights
+      tags: [fundraising]
+      summary: AI-generated fundraising insights
+      responses:
+        "200":
+          description: Insights
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FundraisingInsights" }
+
+  /election-day/summary:
+    get:
+      tags: [ElectionDay]
+      summary: HQ tally summary
+      operationId: getElectionDaySummary
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ElectionDaySummary" }
+
+  /election-day/stations:
+    get:
+      tags: [ElectionDay]
+      summary: List polling stations
+      operationId: listPollingStations
+      parameters:
+        - name: ward
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PollingStation" }
+    post:
+      tags: [ElectionDay]
+      summary: Add polling station
+      operationId: createPollingStation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PollingStationInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PollingStation" }
+
+  /election-day/stations/{id}:
+    patch:
+      tags: [ElectionDay]
+      summary: Update station
+      operationId: updatePollingStation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PollingStationUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PollingStation" }
+
+  /election-day/results:
+    get:
+      tags: [ElectionDay]
+      summary: List tally results
+      operationId: listTallyResults
+      parameters:
+        - name: stationCode
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TallyResult" }
+    post:
+      tags: [ElectionDay]
+      summary: Submit station results
+      operationId: submitStationResults
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TallyResultsInput" }
+      responses:
+        "201":
+          description: Submitted
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TallyResult" }
+
+  /election-day/results/{id}/verify:
+    patch:
+      tags: [ElectionDay]
+      summary: Verify result
+      operationId: verifyTallyResult
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VerifyTallyResultInput" }
+      responses:
+        "200":
+          description: Verified
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TallyResult" }
+
+  /election-day/results/{id}/dispute:
+    patch:
+      tags: [ElectionDay]
+      summary: Dispute result
+      operationId: disputeTallyResult
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DisputeTallyResultInput" }
+      responses:
+        "200":
+          description: Disputed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TallyResult" }
+
+  /election-day/results/{id}:
+    delete:
+      tags: [ElectionDay]
+      summary: Delete result
+      operationId: deleteTallyResult
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /election-day/events:
+    get:
+      tags: [ElectionDay]
+      summary: List election day events
+      operationId: listElectionEvents
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ElectionEvent" }
+    post:
+      tags: [ElectionDay]
+      summary: Log election event
+      operationId: createElectionEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ElectionEventInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ElectionEvent" }
+
+  /election-day/events/{id}:
+    patch:
+      tags: [ElectionDay]
+      summary: Update event status
+      operationId: updateElectionEvent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ElectionEventStatusUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ElectionEvent" }
+
+  /election-day/workqueue:
+    get:
+      tags: [ElectionDay]
+      summary: Election day workqueue
+      operationId: getElectionDayWorkqueue
+      responses:
+        "200":
+          description: Workqueue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ElectionDayWorkqueue" }
+
+  /election-day/published:
+    get:
+      tags: [ElectionDay]
+      summary: Published verified results
+      operationId: getPublishedResults
+      responses:
+        "200":
+          description: Published results
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublishedResults" }
+
+  /social/mentions:
+    get:
+      operationId: listSocialMentions
+      tags: [social]
+      summary: List captured social media mentions
+      parameters:
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: sentiment
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Social mentions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SocialMention"
+
+  /social/scan:
+    post:
+      operationId: scanSocial
+      tags: [social]
+      summary: Run an AI web-search scan for new social media mentions
+      responses:
+        "200":
+          description: Scan result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialScanResult"
+
+  /social/mentions/{id}:
+    delete:
+      operationId: deleteSocialMention
+      tags: [social]
+      summary: Delete a social media mention
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                required: [ok]
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    # ─── Dashboard ────────────────────────────────────────────────────────
+    DashboardSummary:
+      type: object
+      properties:
+        totalMembers: { type: integer }
+        activeVolunteers: { type: integer }
+        messagesSent: { type: integer }
+        doorsKnocked: { type: integer }
+        wardsCovered: { type: integer }
+        openThreats: { type: integer }
+        campaignReadiness: { type: integer }
+        daysToElection: { type: ["integer", "null"] }
+        recentMilestones: { type: integer }
+        upcomingEvents: { type: integer }
+      required:
+        [totalMembers, activeVolunteers, messagesSent, doorsKnocked, wardsCovered, openThreats, campaignReadiness, daysToElection, recentMilestones, upcomingEvents]
+
+    ActivityItem:
+      type: object
+      properties:
+        id: { type: integer }
+        type: { type: string }
+        description: { type: string }
+        timestamp: { type: string }
+        actor: { type: ["string", "null"] }
+        module: { type: string }
+      required: [id, type, description, timestamp, module]
+
+    # ─── Members ─────────────────────────────────────────────────────────
+    Member:
+      type: object
+      properties:
+        id: { type: integer }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        ward: { type: ["string", "null"] }
+        status: { type: string }
+        supportLevel: { type: ["string", "null"] }
+        smsConsent: { type: boolean }
+        whatsappConsent: { type: boolean }
+        emailConsent: { type: boolean }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+      required: [id, firstName, lastName, status, smsConsent, whatsappConsent, emailConsent, createdAt, updatedAt]
+
+    MemberInput:
+      type: object
+      properties:
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        ward: { type: string }
+        status: { type: string }
+        supportLevel: { type: string }
+        smsConsent: { type: boolean }
+        whatsappConsent: { type: boolean }
+        emailConsent: { type: boolean }
+        notes: { type: string }
+      required: [firstName, lastName]
+
+    MemberUpdate:
+      type: object
+      properties:
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        ward: { type: string }
+        status: { type: string }
+        supportLevel: { type: string }
+        smsConsent: { type: boolean }
+        whatsappConsent: { type: boolean }
+        emailConsent: { type: boolean }
+        notes: { type: string }
+
+    MemberList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Member"
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+      required: [data, total, page, limit]
+
+    MemberStats:
+      type: object
+      properties:
+        total: { type: integer }
+        byWard:
+          type: array
+          items:
+            $ref: "#/components/schemas/WardCount"
+        bySupportLevel:
+          type: array
+          items:
+            $ref: "#/components/schemas/LabelCount"
+        consentedSms: { type: integer }
+        consentedWhatsapp: { type: integer }
+        consentedEmail: { type: integer }
+      required: [total, byWard, bySupportLevel, consentedSms, consentedWhatsapp, consentedEmail]
+
+    WardCount:
+      type: object
+      properties:
+        ward: { type: string }
+        count: { type: integer }
+      required: [ward, count]
+
+    LabelCount:
+      type: object
+      properties:
+        label: { type: string }
+        count: { type: integer }
+      required: [label, count]
+
+    # ─── Segments ────────────────────────────────────────────────────────
+    Segment:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: ["string", "null"] }
+        criteria: { type: object }
+        memberCount: { type: integer }
+        isLocked: { type: boolean }
+        createdAt: { type: string }
+      required: [id, name, criteria, memberCount, isLocked, createdAt]
+
+    SegmentInput:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        criteria: { type: object }
+        isLocked: { type: boolean }
+      required: [name, criteria]
+
+    SegmentUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        criteria: { type: object }
+        isLocked: { type: boolean }
+
+    # ─── Messaging ───────────────────────────────────────────────────────
+    MessageCampaign:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        channel: { type: string }
+        status: { type: string }
+        messageBody: { type: string }
+        segmentId: { type: ["integer", "null"] }
+        scheduledAt: { type: ["string", "null"] }
+        sentAt: { type: ["string", "null"] }
+        recipientCount: { type: integer }
+        deliveredCount: { type: integer }
+        openedCount: { type: integer }
+        clickedCount: { type: integer }
+        createdAt: { type: string }
+      required: [id, name, channel, status, messageBody, recipientCount, deliveredCount, openedCount, clickedCount, createdAt]
+
+    MessageCampaignInput:
+      type: object
+      properties:
+        name: { type: string }
+        channel: { type: string, enum: [sms, whatsapp, email] }
+        messageBody: { type: string }
+        segmentId: { type: integer }
+        scheduledAt: { type: string }
+      required: [name, channel, messageBody]
+
+    MessageCampaignUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        messageBody: { type: string }
+        segmentId: { type: integer }
+        scheduledAt: { type: string }
+        status: { type: string }
+
+    MessagingStats:
+      type: object
+      properties:
+        totalSent: { type: integer }
+        totalDelivered: { type: integer }
+        totalOpened: { type: integer }
+        deliveryRate: { type: number }
+        openRate: { type: number }
+        byChannel:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChannelStats"
+      required: [totalSent, totalDelivered, totalOpened, deliveryRate, openRate, byChannel]
+
+    ChannelStats:
+      type: object
+      properties:
+        channel: { type: string }
+        sent: { type: integer }
+        delivered: { type: integer }
+        openRate: { type: number }
+      required: [channel, sent, delivered, openRate]
+
+    # ─── Field Ops ───────────────────────────────────────────────────────
+    CanvassSession:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        type: { type: string }
+        ward: { type: string }
+        date: { type: string }
+        status: { type: string }
+        assignedVolunteers: { type: integer }
+        doorsTarget: { type: integer }
+        doorsCompleted: { type: integer }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string }
+      required: [id, name, type, ward, date, status, assignedVolunteers, doorsTarget, doorsCompleted, createdAt]
+
+    CanvassSessionInput:
+      type: object
+      properties:
+        name: { type: string }
+        type: { type: string }
+        ward: { type: string }
+        date: { type: string }
+        doorsTarget: { type: integer }
+        assignedVolunteers: { type: integer }
+        notes: { type: string }
+      required: [name, ward, date]
+
+    CanvassVisit:
+      type: object
+      properties:
+        id: { type: integer }
+        sessionId: { type: integer }
+        memberId: { type: ["integer", "null"] }
+        address: { type: string }
+        outcome: { type: string }
+        supportLevel: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        visitedAt: { type: string }
+      required: [id, sessionId, address, outcome, visitedAt]
+
+    CanvassVisitInput:
+      type: object
+      properties:
+        sessionId: { type: integer }
+        memberId: { type: integer }
+        address: { type: string }
+        outcome: { type: string, enum: [support, oppose, undecided, not_home, refused] }
+        supportLevel: { type: string }
+        notes: { type: string }
+      required: [sessionId, address, outcome]
+
+    WardCoverage:
+      type: object
+      properties:
+        ward: { type: string }
+        doorsKnocked: { type: integer }
+        doorsTotal: { type: integer }
+        coveragePercent: { type: number }
+        supportCount: { type: integer }
+        opposeCount: { type: integer }
+        undecidedCount: { type: integer }
+      required: [ward, doorsKnocked, doorsTotal, coveragePercent, supportCount, opposeCount, undecidedCount]
+
+    # ─── Volunteers ──────────────────────────────────────────────────────
+    Volunteer:
+      type: object
+      properties:
+        id: { type: integer }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        ward: { type: ["string", "null"] }
+        status: { type: string }
+        role: { type: string }
+        interests: { type: ["string", "null"] }
+        availability: { type: ["string", "null"] }
+        message: { type: ["string", "null"] }
+        source: { type: ["string", "null"] }
+        doorsKnocked: { type: integer }
+        hoursLogged: { type: number }
+        joinedAt: { type: string }
+      required: [id, firstName, lastName, status, role, doorsKnocked, hoursLogged, joinedAt]
+
+    VolunteerInput:
+      type: object
+      properties:
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        ward: { type: string }
+        role: { type: string }
+      required: [firstName, lastName]
+
+    VolunteerUpdate:
+      type: object
+      properties:
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        ward: { type: string }
+        status: { type: string }
+        role: { type: string }
+        hoursLogged: { type: number }
+
+    VolunteerRegistration:
+      type: object
+      properties:
+        firstName: { type: string }
+        lastName: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        ward: { type: string }
+        interests: { type: string }
+        availability: { type: string }
+        message: { type: string }
+      required: [firstName, lastName, phone]
+
+    VolunteerAssignment:
+      type: object
+      properties:
+        id: { type: integer }
+        volunteerId: { type: integer }
+        ward: { type: string }
+        sessionId: { type: ["integer", "null"] }
+        assignedAt: { type: string }
+      required: [id, volunteerId, ward, assignedAt]
+
+    VolunteerAssignmentInput:
+      type: object
+      properties:
+        volunteerId: { type: integer }
+        ward: { type: string }
+        sessionId: { type: integer }
+      required: [volunteerId, ward]
+
+    # ─── Surveys ─────────────────────────────────────────────────────────
+    Survey:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        description: { type: ["string", "null"] }
+        status: { type: string }
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/SurveyQuestion"
+        responseCount: { type: integer }
+        createdAt: { type: string }
+      required: [id, title, status, questions, responseCount, createdAt]
+
+    SurveyQuestion:
+      type: object
+      properties:
+        id: { type: integer }
+        text: { type: string }
+        type: { type: string, enum: [text, single_choice, multiple_choice, rating] }
+        options:
+          type: array
+          items:
+            type: string
+        order: { type: integer }
+      required: [id, text, type, order]
+
+    SurveyInput:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/SurveyQuestionInput"
+      required: [title]
+
+    SurveyQuestionInput:
+      type: object
+      properties:
+        text: { type: string }
+        type: { type: string, enum: [text, single_choice, multiple_choice, rating] }
+        options:
+          type: array
+          items:
+            type: string
+        order: { type: integer }
+      required: [text, type, order]
+
+    SurveyResponse:
+      type: object
+      properties:
+        id: { type: integer }
+        surveyId: { type: integer }
+        memberId: { type: ["integer", "null"] }
+        answers: { type: object }
+        submittedAt: { type: string }
+      required: [id, surveyId, answers, submittedAt]
+
+    SurveyResponseInput:
+      type: object
+      properties:
+        memberId: { type: integer }
+        answers: { type: object }
+      required: [answers]
+
+    # ─── Events ──────────────────────────────────────────────────────────
+    CampaignEvent:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        description: { type: ["string", "null"] }
+        type: { type: string }
+        location: { type: ["string", "null"] }
+        ward: { type: ["string", "null"] }
+        startDate: { type: string }
+        endDate: { type: ["string", "null"] }
+        status: { type: string }
+        attendeeCount: { type: integer }
+        maxAttendees: { type: ["integer", "null"] }
+        createdAt: { type: string }
+      required: [id, title, type, startDate, status, attendeeCount, createdAt]
+
+    CampaignEventInput:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        type: { type: string }
+        location: { type: string }
+        ward: { type: string }
+        startDate: { type: string }
+        endDate: { type: string }
+        maxAttendees: { type: integer }
+      required: [title, type, startDate]
+
+    CampaignEventUpdate:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        type: { type: string }
+        location: { type: string }
+        ward: { type: string }
+        startDate: { type: string }
+        endDate: { type: string }
+        status: { type: string }
+        maxAttendees: { type: integer }
+
+    # ─── Intelligence ─────────────────────────────────────────────────────
+    NarrativeMention:
+      type: object
+      properties:
+        id: { type: integer }
+        platform: { type: string }
+        content: { type: string }
+        author: { type: ["string", "null"] }
+        url: { type: ["string", "null"] }
+        threatLevel: { type: string, enum: [low, medium, high, critical] }
+        status: { type: string, enum: [open, monitoring, responded, resolved] }
+        counterNarrative: { type: ["string", "null"] }
+        detectedAt: { type: string }
+        respondedAt: { type: ["string", "null"] }
+      required: [id, platform, content, threatLevel, status, detectedAt]
+
+    NarrativeMentionInput:
+      type: object
+      properties:
+        platform: { type: string }
+        content: { type: string }
+        author: { type: string }
+        url: { type: string }
+        threatLevel: { type: string, enum: [low, medium, high, critical] }
+      required: [platform, content, threatLevel]
+
+    MentionResponseInput:
+      type: object
+      properties:
+        counterNarrative: { type: string }
+        status: { type: string, enum: [monitoring, responded, resolved] }
+      required: [counterNarrative, status]
+
+    Competitor:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        party: { type: ["string", "null"] }
+        constituency: { type: ["string", "null"] }
+        strengths:
+          type: array
+          items: { type: string }
+        weaknesses:
+          type: array
+          items: { type: string }
+        promisesMade:
+          type: array
+          items: { type: string }
+        promisesKept: { type: integer }
+        promisesBroken: { type: integer }
+        lastUpdated: { type: string }
+      required: [id, name, strengths, weaknesses, promisesMade, promisesKept, promisesBroken, lastUpdated]
+
+    CompetitorInput:
+      type: object
+      properties:
+        name: { type: string }
+        party: { type: string }
+        constituency: { type: string }
+        strengths:
+          type: array
+          items: { type: string }
+        weaknesses:
+          type: array
+          items: { type: string }
+        promisesMade:
+          type: array
+          items: { type: string }
+      required: [name]
+
+    WarRoomBrief:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        summary: { type: string }
+        priority: { type: string, enum: [low, medium, high, urgent] }
+        category: { type: string }
+        actions:
+          type: array
+          items: { type: string }
+        status: { type: string }
+        createdAt: { type: string }
+      required: [id, title, summary, priority, category, actions, status, createdAt]
+
+    WarRoomBriefInput:
+      type: object
+      properties:
+        title: { type: string }
+        summary: { type: string }
+        priority: { type: string, enum: [low, medium, high, urgent] }
+        category: { type: string }
+        actions:
+          type: array
+          items: { type: string }
+      required: [title, summary, priority, category]
+
+    NarrativeScore:
+      type: object
+      properties:
+        score: { type: integer }
+        trend: { type: string, enum: [up, down, stable] }
+        openThreats: { type: integer }
+        criticalThreats: { type: integer }
+        avgResponseTimeHours: { type: number }
+        mentionsByPlatform:
+          type: array
+          items:
+            $ref: "#/components/schemas/LabelCount"
+      required: [score, trend, openThreats, criticalThreats, avgResponseTimeHours, mentionsByPlatform]
+
+    # ─── Campaign Plan ────────────────────────────────────────────────────
+    Milestone:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        description: { type: ["string", "null"] }
+        dueDate: { type: string }
+        status: { type: string, enum: [pending, in_progress, completed, overdue] }
+        category: { type: string }
+        owner: { type: ["string", "null"] }
+        createdAt: { type: string }
+      required: [id, title, dueDate, status, category, createdAt]
+
+    MilestoneInput:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        dueDate: { type: string }
+        category: { type: string }
+        owner: { type: string }
+      required: [title, dueDate, category]
+
+    MilestoneUpdate:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        dueDate: { type: string }
+        status: { type: string, enum: [pending, in_progress, completed, overdue] }
+        category: { type: string }
+        owner: { type: string }
+
+    ReadinessScore:
+      type: object
+      properties:
+        overall: { type: integer }
+        byCategory:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryScore"
+        completedMilestones: { type: integer }
+        totalMilestones: { type: integer }
+      required: [overall, byCategory, completedMilestones, totalMilestones]
+
+    CategoryScore:
+      type: object
+      properties:
+        category: { type: string }
+        score: { type: integer }
+      required: [category, score]
+
+    ElectionCountdown:
+      type: object
+      properties:
+        electionDate: { type: ["string", "null"] }
+        daysRemaining: { type: ["integer", "null"] }
+        phase: { type: string }
+      required: [phase]
+
+    ElectionDateInput:
+      type: object
+      properties:
+        electionDate: { type: string }
+      required: [electionDate]
+
+    # ─── KOL ─────────────────────────────────────────────────────────────
+    KOL:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        platform: { type: string }
+        handle: { type: ["string", "null"] }
+        tier: { type: string, enum: [micro, mid, macro, mega] }
+        influenceScore: { type: integer }
+        followerCount: { type: integer }
+        alignment: { type: string, enum: [supporter, neutral, opponent] }
+        ward: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        lastEngaged: { type: ["string", "null"] }
+        createdAt: { type: string }
+      required: [id, name, platform, tier, influenceScore, followerCount, alignment, createdAt]
+
+    KOLInput:
+      type: object
+      properties:
+        name: { type: string }
+        platform: { type: string }
+        handle: { type: string }
+        tier: { type: string, enum: [micro, mid, macro, mega] }
+        influenceScore: { type: integer }
+        followerCount: { type: integer }
+        alignment: { type: string, enum: [supporter, neutral, opponent] }
+        ward: { type: string }
+        notes: { type: string }
+      required: [name, platform, tier, followerCount, alignment]
+
+    KOLUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        handle: { type: string }
+        tier: { type: string, enum: [micro, mid, macro, mega] }
+        influenceScore: { type: integer }
+        followerCount: { type: integer }
+        alignment: { type: string, enum: [supporter, neutral, opponent] }
+        notes: { type: string }
+        lastEngaged: { type: string }
+
+    # ─── Fundraising ─────────────────────────────────────────────────────────
+    FundraisingSummary:
+      type: object
+      properties:
+        totalRaised: { type: integer }
+        donorCount: { type: integer }
+        totalDonors: { type: integer }
+        totalGoal: { type: integer }
+        activeCampaigns: { type: integer }
+        totalPledged: { type: integer }
+        pendingPledges: { type: integer }
+        fulfilledPledges: { type: integer }
+        channelBreakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              channel: { type: string }
+              total: { type: integer }
+              count: { type: integer }
+            required: [channel, total, count]
+      required: [totalRaised, donorCount, totalDonors, totalGoal, activeCampaigns, totalPledged, pendingPledges, fulfilledPledges, channelBreakdown]
+
+    FundraisingCampaign:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: ["string", "null"] }
+        goalAmount: { type: integer }
+        raisedAmount: { type: integer }
+        status: { type: string, enum: [active, completed, paused] }
+        startDate: { type: ["string", "null"] }
+        endDate: { type: ["string", "null"] }
+        createdAt: { type: string }
+      required: [id, name, goalAmount, raisedAmount, status, createdAt]
+
+    FundraisingCampaignInput:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        goalAmount: { type: integer }
+        startDate: { type: string }
+        endDate: { type: string }
+      required: [name]
+
+    FundraisingCampaignUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        goalAmount: { type: integer }
+        status: { type: string, enum: [active, completed, paused] }
+        startDate: { type: string }
+        endDate: { type: string }
+
+    Donation:
+      type: object
+      properties:
+        id: { type: integer }
+        campaignId: { type: ["integer", "null"] }
+        donorId: { type: ["integer", "null"] }
+        donorName: { type: string }
+        amount: { type: integer }
+        channel: { type: string, enum: [cash, mpesa, bank, cheque, online] }
+        reference: { type: ["string", "null"] }
+        ward: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        reconciled: { type: integer }
+        receivedAt: { type: string }
+        createdAt: { type: string }
+      required: [id, donorName, amount, channel, reconciled, receivedAt, createdAt]
+
+    DonationInput:
+      type: object
+      properties:
+        campaignId: { type: integer }
+        donorId: { type: integer }
+        donorName: { type: string }
+        amount: { type: integer }
+        channel: { type: string, enum: [cash, mpesa, bank, cheque, online] }
+        reference: { type: string }
+        ward: { type: string }
+        notes: { type: string }
+      required: [donorName, amount]
+
+    ReconcileDonationInput:
+      type: object
+      properties:
+        notes: { type: string }
+
+    Donor:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        phone: { type: ["string", "null"] }
+        email: { type: ["string", "null"] }
+        ward: { type: ["string", "null"] }
+        type: { type: string, enum: [individual, business, diaspora, organization] }
+        tier: { type: string, enum: [major, regular, grassroots] }
+        totalGiven: { type: integer }
+        notes: { type: ["string", "null"] }
+        tags: { type: ["string", "null"] }
+        createdAt: { type: string }
+      required: [id, name, type, tier, totalGiven, createdAt]
+
+    DonorInput:
+      type: object
+      properties:
+        name: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        ward: { type: string }
+        type: { type: string, enum: [individual, business, diaspora, organization] }
+        tier: { type: string, enum: [major, regular, grassroots] }
+        notes: { type: string }
+        tags: { type: string }
+      required: [name]
+
+    DonorUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        ward: { type: string }
+        type: { type: string }
+        tier: { type: string }
+        notes: { type: string }
+        tags: { type: string }
+
+    Pledge:
+      type: object
+      properties:
+        id: { type: integer }
+        donorName: { type: string }
+        donorId: { type: ["integer", "null"] }
+        campaignId: { type: ["integer", "null"] }
+        amount: { type: integer }
+        promisedDate: { type: ["string", "null"] }
+        fulfilledDate: { type: ["string", "null"] }
+        status: { type: string, enum: [pending, fulfilled, defaulted, partial] }
+        channel: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string }
+      required: [id, donorName, amount, status, createdAt]
+
+    PledgeInput:
+      type: object
+      properties:
+        donorName: { type: string }
+        donorId: { type: integer }
+        campaignId: { type: integer }
+        amount: { type: integer }
+        promisedDate: { type: string }
+        channel: { type: string }
+        notes: { type: string }
+      required: [donorName, amount]
+
+    PledgeUpdate:
+      type: object
+      properties:
+        status: { type: string, enum: [pending, fulfilled, defaulted, partial] }
+        fulfilledDate: { type: string }
+        notes: { type: string }
+        channel: { type: string }
+        promisedDate: { type: string }
+
+    FundraisingPipeline:
+      type: object
+      properties:
+        donorBreakdown:
+          type: object
+          properties:
+            major: { type: integer }
+            regular: { type: integer }
+            grassroots: { type: integer }
+          required: [major, regular, grassroots]
+        wardBreakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              ward: { type: string }
+              count: { type: integer }
+              total: { type: integer }
+            required: [ward, count, total]
+        typeBreakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string }
+              count: { type: integer }
+              total: { type: integer }
+            required: [type, count, total]
+        pendingPledges:
+          type: array
+          items: { $ref: "#/components/schemas/Pledge" }
+        topDonors:
+          type: array
+          items: { $ref: "#/components/schemas/Donor" }
+        monthlyTrend:
+          type: array
+          items:
+            type: object
+            properties:
+              month: { type: string }
+              total: { type: integer }
+              count: { type: integer }
+            required: [month, total, count]
+      required: [donorBreakdown, wardBreakdown, typeBreakdown, pendingPledges, topDonors, monthlyTrend]
+
+    ReconciliationSummary:
+      type: object
+      properties:
+        total: { type: integer }
+        reconciled: { type: integer }
+        unreconciled: { type: integer }
+        totalAmount: { type: integer }
+        reconciledAmount: { type: integer }
+        unreconciledAmount: { type: integer }
+        byChannel:
+          type: array
+          items:
+            type: object
+            properties:
+              channel: { type: string }
+              total: { type: integer }
+              reconciled: { type: integer }
+              unreconciled: { type: integer }
+              count: { type: integer }
+            required: [channel, total, reconciled, unreconciled, count]
+        unreconciledDonations:
+          type: array
+          items: { $ref: "#/components/schemas/Donation" }
+      required: [total, reconciled, unreconciled, totalAmount, reconciledAmount, unreconciledAmount, byChannel, unreconciledDonations]
+
+    FundraisingInsights:
+      type: object
+      properties:
+        insights:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [success, info, warning, danger] }
+              title: { type: string }
+              body: { type: string }
+              action: { type: string }
+            required: [type, title, body, action]
+        raised: { type: integer }
+        goal: { type: integer }
+        pct: { type: integer }
+        gap: { type: integer }
+        pledgePending: { type: integer }
+        donorCount: { type: integer }
+      required: [insights, raised, goal, pct, gap, pledgePending, donorCount]
+
+    PollingStation:
+      type: object
+      properties:
+        id: { type: integer }
+        code: { type: string }
+        name: { type: string }
+        ward: { type: string }
+        registeredVoters: { type: integer }
+        streamCount: { type: integer }
+        agentName: { type: ["string", "null"] }
+        agentPhone: { type: ["string", "null"] }
+        status: { type: string, enum: [pending, open, submitted, verified] }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string }
+      required: [id, code, name, ward, registeredVoters, streamCount, status, createdAt]
+
+    PollingStationInput:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        ward: { type: string }
+        registeredVoters: { type: integer }
+        streamCount: { type: integer }
+        agentName: { type: string }
+        agentPhone: { type: string }
+      required: [code, name, ward]
+
+    PollingStationUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        ward: { type: string }
+        registeredVoters: { type: integer }
+        streamCount: { type: integer }
+        agentName: { type: string }
+        agentPhone: { type: string }
+        status: { type: string, enum: [pending, open, submitted, verified] }
+        notes: { type: string }
+
+    TallyResult:
+      type: object
+      properties:
+        id: { type: integer }
+        stationId: { type: integer }
+        stationCode: { type: string }
+        candidateName: { type: string }
+        party: { type: ["string", "null"] }
+        votes: { type: integer }
+        totalValidVotes: { type: ["integer", "null"] }
+        rejectedVotes: { type: integer }
+        registeredVoters: { type: ["integer", "null"] }
+        status: { type: string, enum: [draft, submitted, verified, disputed] }
+        submittedBy: { type: ["string", "null"] }
+        verifiedBy: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        submittedAt: { type: string }
+        verifiedAt: { type: ["string", "null"] }
+        createdAt: { type: string }
+      required: [id, stationId, stationCode, candidateName, votes, rejectedVotes, status, submittedAt, createdAt]
+
+    TallyResultsInput:
+      type: object
+      properties:
+        stationCode: { type: string }
+        totalValidVotes: { type: integer }
+        rejectedVotes: { type: integer }
+        submittedBy: { type: string }
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              candidateName: { type: string }
+              party: { type: string }
+              votes: { type: integer }
+            required: [candidateName, votes]
+      required: [stationCode, results]
+
+    ElectionEvent:
+      type: object
+      properties:
+        id: { type: integer }
+        type: { type: string, enum: [info, alert, incident, milestone] }
+        title: { type: string }
+        description: { type: string }
+        ward: { type: ["string", "null"] }
+        stationCode: { type: ["string", "null"] }
+        priority: { type: string, enum: [low, normal, high, urgent] }
+        status: { type: string, enum: [open, resolved] }
+        createdAt: { type: string }
+      required: [id, type, title, description, priority, status, createdAt]
+
+    ElectionEventInput:
+      type: object
+      properties:
+        type: { type: string, enum: [info, alert, incident, milestone] }
+        title: { type: string }
+        description: { type: string }
+        ward: { type: string }
+        stationCode: { type: string }
+        priority: { type: string, enum: [low, normal, high, urgent] }
+      required: [title, description]
+
+    ElectionEventStatusUpdate:
+      type: object
+      properties:
+        status: { type: string, enum: [open, resolved] }
+        notes: { type: string }
+
+    VerifyTallyResultInput:
+      type: object
+      properties:
+        verifiedBy: { type: string }
+
+    DisputeTallyResultInput:
+      type: object
+      properties:
+        notes: { type: string }
+
+    ElectionDaySummary:
+      type: object
+      properties:
+        totalStations: { type: integer }
+        submittedStations: { type: integer }
+        verifiedStations: { type: integer }
+        totalRegisteredVoters: { type: integer }
+        tallyByCandidate:
+          type: array
+          items:
+            type: object
+            properties:
+              candidateName: { type: string }
+              party: { type: ["string", "null"] }
+              totalVotes: { type: integer }
+              verifiedVotes: { type: integer }
+        wardBreakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              ward: { type: string }
+              totalStations: { type: integer }
+              submittedStations: { type: integer }
+      required: [totalStations, submittedStations, verifiedStations, totalRegisteredVoters, tallyByCandidate, wardBreakdown]
+
+    # ─── Insights ────────────────────────────────────────────────────────────
+
+    InsightPoll:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        description: { type: ["string", "null"] }
+        status: { type: string }
+        shareToken: { type: string }
+        slug: { type: ["string", "null"] }
+        targetAudience: { type: object, additionalProperties: true }
+        respondentIds: { type: array, items: { type: integer } }
+        responseCount: { type: integer }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+        publishedAt: { type: ["string", "null"] }
+      required: [id, title, status, shareToken, targetAudience, respondentIds, responseCount, createdAt, updatedAt]
+
+    InsightPollInput:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        targetAudience: { type: object, additionalProperties: true }
+        respondentIds: { type: array, items: { type: integer } }
+      required: [title]
+
+    InsightPollUpdate:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        status: { type: string }
+        slug: { type: string }
+        targetAudience: { type: object, additionalProperties: true }
+        respondentIds: { type: array, items: { type: integer } }
+
+    InsightQuestion:
+      type: object
+      properties:
+        id: { type: integer }
+        pollId: { type: integer }
+        type: { type: string }
+        text: { type: string }
+        order: { type: integer }
+        options: { type: array, items: { type: string } }
+        required: { type: boolean }
+        createdAt: { type: string }
+      required: [id, pollId, type, text, order, options, required, createdAt]
+
+    InsightQuestionInput:
+      type: object
+      properties:
+        type: { type: string, enum: [single_choice, multi_choice, open_ended] }
+        text: { type: string }
+        order: { type: integer }
+        options: { type: array, items: { type: string } }
+        required: { type: boolean }
+      required: [type, text]
+
+    InsightQuestionUpdate:
+      type: object
+      properties:
+        type: { type: string, enum: [single_choice, multi_choice, open_ended] }
+        text: { type: string }
+        order: { type: integer }
+        options: { type: array, items: { type: string } }
+        required: { type: boolean }
+
+    InsightResponse:
+      type: object
+      properties:
+        id: { type: integer }
+        pollId: { type: integer }
+        respondentId: { type: ["string", "null"] }
+        respondentEmail: { type: ["string", "null"] }
+        respondentName: { type: ["string", "null"] }
+        respondentWard: { type: ["string", "null"] }
+        respondentAgeGroup: { type: ["string", "null"] }
+        respondentGender: { type: ["string", "null"] }
+        respondentSupportLevel: { type: ["string", "null"] }
+        submittedAt: { type: string }
+        answers:
+          type: array
+          items:
+            type: object
+            properties:
+              questionId: { type: integer }
+              value: { type: string }
+            required: [questionId, value]
+      required: [id, pollId, submittedAt, answers]
+
+    InsightSubmitInput:
+      type: object
+      properties:
+        respondentName: { type: string }
+        respondentEmail: { type: string }
+        respondentWard: { type: string }
+        respondentAgeGroup: { type: string }
+        respondentGender: { type: string }
+        respondentSupportLevel: { type: string }
+        submissionToken: { type: string }
+        channel: { type: string }
+        answers:
+          type: array
+          items:
+            type: object
+            properties:
+              questionId: { type: integer }
+              value: { type: string }
+            required: [questionId, value]
+      required: [answers]
+
+    InsightResults:
+      type: object
+      properties:
+        poll:
+          $ref: "#/components/schemas/InsightPoll"
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/InsightQuestion"
+        totalResponses: { type: integer }
+        invitedCount: { type: integer }
+        responseRate: { type: number }
+        questionResults:
+          type: array
+          items:
+            type: object
+            properties:
+              questionId: { type: integer }
+              questionText: { type: string }
+              type: { type: string }
+              totalAnswers: { type: integer }
+              distribution:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    value: { type: string }
+                    count: { type: integer }
+                    percentage: { type: number }
+                  required: [value, count, percentage]
+              openEndedAnswers:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    responseId: { type: integer }
+                    value: { type: string }
+                    sentiment: { type: ["string", "null"] }
+                  required: [responseId, value]
+            required: [questionId, questionText, type, totalAnswers, distribution]
+      required: [poll, questions, totalResponses, invitedCount, responseRate, questionResults]
+
+    InsightCrossTabResults:
+      type: object
+      properties:
+        segment: { type: string }
+        segmentValue: { type: string }
+        totalResponses: { type: integer }
+        questionResults:
+          type: array
+          items:
+            type: object
+            properties:
+              questionId: { type: integer }
+              distribution:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    value: { type: string }
+                    count: { type: integer }
+                    percentage: { type: number }
+                  required: [value, count, percentage]
+            required: [questionId, distribution]
+      required: [segment, segmentValue, totalResponses, questionResults]
+
+    InsightTrendData:
+      type: object
+      properties:
+        questionText: { type: string }
+        periods:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string }
+              pollId: { type: integer }
+              pollTitle: { type: string }
+              distribution:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    value: { type: string }
+                    count: { type: integer }
+                    percentage: { type: number }
+                  required: [value, count, percentage]
+            required: [date, pollId, pollTitle, distribution]
+      required: [questionText, periods]
+
+    InsightAiSummary:
+      type: object
+      properties:
+        id: { type: integer }
+        pollId: { type: integer }
+        questionId: { type: ["integer", "null"] }
+        summaryType: { type: string }
+        content: { type: string }
+        metadata: { type: object, additionalProperties: true }
+        generatedAt: { type: string }
+      required: [id, pollId, summaryType, content, metadata, generatedAt]
+
+    InsightPollPublicView:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        description: { type: ["string", "null"] }
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/InsightQuestion"
+      required: [id, title, questions]
+
+    InsightShareEventInput:
+      type: object
+      properties:
+        eventType: { type: string, enum: [view, start] }
+        channel: { type: string }
+      required: [eventType]
+
+    InsightDistribution:
+      type: object
+      properties:
+        slug: { type: ["string", "null"] }
+        shareToken: { type: string }
+        totals:
+          type: object
+          properties:
+            views: { type: integer }
+            starts: { type: integer }
+            completes: { type: integer }
+          required: [views, starts, completes]
+        conversionRate: { type: number }
+        startRate: { type: number }
+        completionRate: { type: number }
+        byChannel:
+          type: array
+          items:
+            type: object
+            properties:
+              channel: { type: string }
+              views: { type: integer }
+              starts: { type: integer }
+              completes: { type: integer }
+            required: [channel, views, starts, completes]
+        timeline:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string }
+              views: { type: integer }
+              starts: { type: integer }
+              completes: { type: integer }
+            required: [date, views, starts, completes]
+      required: [shareToken, totals, conversionRate, startRate, completionRate, byChannel, timeline]
+
+    # ─── Insights paths (added above in schemas) ────────────────────────────
+
+    ElectionDayWorkqueue:
+      type: object
+      properties:
+        unsubmittedStations:
+          type: array
+          items: { $ref: "#/components/schemas/PollingStation" }
+        pendingVerification:
+          type: array
+          items: { $ref: "#/components/schemas/TallyResult" }
+        submittedCodes:
+          type: array
+          items: { type: string }
+      required: [unsubmittedStations, pendingVerification, submittedCodes]
+
+    PublishedResults:
+      type: object
+      properties:
+        totals:
+          type: array
+          items:
+            type: object
+            properties:
+              candidateName: { type: string }
+              party: { type: string }
+              totalVotes: { type: integer }
+              stationCount: { type: integer }
+        breakdown:
+          type: array
+          items: { $ref: "#/components/schemas/TallyResult" }
+      required: [totals, breakdown]
+
+    SocialMention:
+      type: object
+      properties:
+        id: { type: integer }
+        summary: { type: string }
+        source: { type: ["string", "null"] }
+        url: { type: ["string", "null"] }
+        sentiment: { type: string }
+        category: { type: string }
+        topic: { type: ["string", "null"] }
+        publishedAt: { type: ["string", "null"] }
+        scannedAt: { type: string }
+      required: [id, summary, sentiment, category, scannedAt]
+
+    SocialScanResult:
+      type: object
+      properties:
+        scanned: { type: integer }
+        inserted: { type: integer }
+        mentions:
+          type: array
+          items: { $ref: "#/components/schemas/SocialMention" }
+      required: [scanned, inserted, mentions]

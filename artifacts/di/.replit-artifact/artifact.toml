@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/di/"
+title = "ACL AI DI OS"
+version = "1.0.0"
+id = "artifacts/di"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/di/" ]
+localPort = 25689
+
+[services.development]
+run = "pnpm --filter @workspace/di run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/di", "run", "build" ]
+publicDir = "artifacts/di/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25689"
+BASE_PATH = "/di/"

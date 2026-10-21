@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "CommandCentre OS"
+version = "1.0.0"
+id = "artifacts/commandcentre"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24462
+
+[services.development]
+run = "pnpm --filter @workspace/commandcentre run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/commandcentre", "run", "build" ]
+publicDir = "artifacts/commandcentre/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24462"
+BASE_PATH = "/"

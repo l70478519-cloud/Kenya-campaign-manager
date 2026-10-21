@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/extractor/"
+title = "Contact Extractor"
+version = "1.0.0"
+id = "artifacts/contact-extractor"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/extractor/" ]
+localPort = 5000
+
+[services.development]
+run = "streamlit run app.py --server.port $PORT"
+
+[services.env]
+PORT = "5000"
+
+[services.production]
+
+[services.production.build]
+args = ["pip", "install", "-r", "artifacts/contact-extractor/requirements.txt"]
+
+[services.production.run]
+args = ["streamlit", "run", "artifacts/contact-extractor/app.py", "--server.port", "5000", "--server.address", "0.0.0.0", "--server.baseUrlPath", "extractor", "--server.headless", "true", "--server.enableCORS", "false", "--server.enableXsrfProtection", "false", "--browser.gatherUsageStats", "false"]
+
+[services.production.run.env]
+PORT = "5000"
+
+[services.production.health.startup]
+path = "/extractor/_stcore/health"

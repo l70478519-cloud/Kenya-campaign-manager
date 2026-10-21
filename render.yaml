@@ -1,18 +1,38 @@
 services:
   - type: web
     name: kenya-campaign-manager
-    runtime: docker
-    plan: starter
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: corepack enable && corepack prepare pnpm@11.25.0 --activate && pnpm install --frozen-lockfile && PORT=10000 BASE_PATH=/ NODE_ENV=production pnpm --filter @workspace/commandcentre run build && pnpm --filter @workspace/api-server run build
+    startCommand: pnpm --filter @workspace/api-server run start
+    healthCheckPath: /api/healthz
     envVars:
-      - key: ADMIN_EMAIL
+      - key: NODE_VERSION
+        value: 24.14.0
+      - key: NODE_ENV
+        value: production
+      - key: SITE_AT_ROOT
+        value: "true"
+      - key: DATABASE_URL
         sync: false
-      - key: ADMIN_PASSWORD
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: MFA_ENCRYPTION_KEY
+        generateValue: true
+      - key: MFA_ISSUER
+        value: Kenya Campaign Manager
+      - key: BOOTSTRAP_ADMIN_EMAIL
         sync: false
-      - key: SECURE_COOKIES
-        value: "1"
-      - key: DATABASE_PATH
-        value: /data/campaigns.db
-    disk:
-      name: campaign-data
-      mountPath: /data
-      sizeGB: 1
+      - key: BOOTSTRAP_ADMIN_USERNAME
+        sync: false
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false
+      - key: PGSSLMODE
+        value: require
+      - key: AI_INTEGRATIONS_OPENAI_API_KEY
+        sync: false
+      - key: AI_INTEGRATIONS_OPENAI_BASE_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false

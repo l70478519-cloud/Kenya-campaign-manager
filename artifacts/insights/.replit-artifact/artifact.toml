@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/insights/"
+title = "ACL AI OS INSIGHTS"
+version = "1.0.0"
+id = "artifacts/insights"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/insights/" ]
+localPort = 23706
+
+[services.development]
+run = "pnpm --filter @workspace/insights run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/insights", "run", "build" ]
+publicDir = "artifacts/insights/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23706"
+BASE_PATH = "/insights/"
