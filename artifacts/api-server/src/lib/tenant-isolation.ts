@@ -20,18 +20,22 @@ import { unitsForSeat } from "../data/kenya-electoral-units";
  */
 
 const SHARED_TABLES = new Set([
-  "admin_users", "admin_roles", "audit_logs", "system_config", "social_source_health", "user_sessions",
+  "admin_users", "admin_roles", "audit_logs", "system_config", "user_sessions",
   "kaiti_organisations", "kaiti_campaigns", "kaiti_campaign_members", "kaiti_user_mfa",
   "kaiti_api_failures", "kaiti_export_log", "kaiti_demo_requests",
 ]);
 
-/** Unique keys that must become unique per campaign: [table, column, old constraint, new constraint]. */
+/** Unique keys that must become unique per campaign: [table, column, old constraint or unique index, new constraint]. */
 const PER_CAMPAIGN_UNIQUES: [string, string, string, string][] = [
   ["campaign_settings", "key", "campaign_settings_key_unique", "campaign_settings_campaign_key_unique"],
   ["polling_stations", "code", "polling_stations_code_unique", "polling_stations_campaign_code_unique"],
   ["turnout_assumptions", "ward", "turnout_assumptions_ward_unique", "turnout_assumptions_campaign_ward_unique"],
   ["platform_integrations", "platform", "platform_integrations_platform_unique", "platform_integrations_campaign_platform_unique"],
   ["poll_participant_registrations", "phone", "poll_participant_registrations_phone_key", "poll_participant_registrations_campaign_phone_unique"],
+  // Social listening source status per campaign. The old key is a constraint when the table came from
+  // migrations/20261012_social_source_health.sql and a unique index when it came from drizzle-kit push.
+  ["social_source_health", "source_key", "social_source_health_source_key_key", "social_source_health_campaign_source_key_unique"],
+  ["social_source_health", "source_key", "social_source_health_source_key_unique", "social_source_health_campaign_source_key_unique"],
 ];
 
 const ident = (s: string) => `"${s.replace(/"/g, '""')}"`;
@@ -100,6 +104,8 @@ export async function ensureTenantIsolation(): Promise<IsolationStatus> {
       for (const [table, col, oldName, newName] of PER_CAMPAIGN_UNIQUES) {
         if (!tables.includes(table)) continue;
         await db.execute(sql.raw(`ALTER TABLE public.${ident(table)} DROP CONSTRAINT IF EXISTS ${ident(oldName)}`));
+        // drizzle-kit push creates some old keys as plain unique indexes, which DROP CONSTRAINT leaves behind.
+        await db.execute(sql.raw(`DROP INDEX IF EXISTS public.${ident(oldName)}`));
         await db.execute(sql.raw(`DO $$ BEGIN
           IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '${newName}') THEN
             ALTER TABLE public.${ident(table)} ADD CONSTRAINT ${ident(newName)} UNIQUE (owner_campaign_id, ${ident(col)});

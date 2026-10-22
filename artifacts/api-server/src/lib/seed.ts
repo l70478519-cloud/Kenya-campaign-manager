@@ -19,6 +19,12 @@ export async function ensureAuthColumns(): Promise<void> {
   await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "admin_users_username_unique" ON "admin_users" ("username")`);
 }
 
+// Link-check result for each social listening mention (docs/SOCIAL_LISTENING_PLAN.md, SL-1.5).
+export async function ensureSocialListeningColumns(): Promise<void> {
+  await db.execute(sql`ALTER TABLE "social_mentions" ADD COLUMN IF NOT EXISTS "link_status" text`);
+  await db.execute(sql`ALTER TABLE "social_mentions" ADD COLUMN IF NOT EXISTS "link_checked_at" timestamp`);
+}
+
 // Idempotent DDL for the turnout-prediction assumptions table. Production is
 // autoscale with no Drizzle migration files, so we self-heal at boot (same
 // pattern as the auth columns) to keep dev push and prod in sync.
@@ -434,6 +440,7 @@ async function ensureSeededAsOwner(): Promise<void> {
   await ensureTenancyAndMfaTables();
   await ensureCampaignColumns();
   await ensureDemoRequestsTable();
+  await ensureSocialListeningColumns();
   await seedDefaultRoles();
   await seedDefaultConfig();
   await ensureBootstrapAdmin();

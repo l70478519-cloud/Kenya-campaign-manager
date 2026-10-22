@@ -19,6 +19,7 @@ const CATEGORIES: { key: string; label: string }[] = [
   { key: "candidate", label: (CAMPAIGN.candidate || "Candidate").toUpperCase() },
   { key: "issues", label: "LOCAL ISSUES" },
   { key: "opponent", label: "PUBLIC RECORDS" },
+  { key: "competitor", label: "OPPONENTS" },
 ];
 
 const SENTIMENTS: { key: string; label: string }[] = [
@@ -32,6 +33,14 @@ const CATEGORY_LABEL: Record<string, string> = {
   candidate: (CAMPAIGN.candidate || "Candidate").toUpperCase(),
   issues: "LOCAL ISSUES",
   opponent: "PUBLIC RECORDS",
+  competitor: "OPPONENTS",
+};
+
+// Link status recorded by the scan (docs/SOCIAL_LISTENING_PLAN.md, SL-1.5).
+const LINK_LABEL: Record<string, { text: string; title: string; className: string }> = {
+  verified: { text: "LINK CHECKED", title: "The source link opened when this mention was saved.", className: "border-green-500/40 text-green-400" },
+  unconfirmed: { text: "LINK UNCONFIRMED", title: "The site blocked the automated check or did not answer. Open it to confirm.", className: "border-amber-500/40 text-amber-300" },
+  feed: { text: "NEWS FEED", title: "From a public news feed; the link was not opened automatically.", className: "border-border" },
 };
 
 function mentionDate(value?: string | null): number {
@@ -148,7 +157,10 @@ export default function SocialListening() {
       return bDate - aDate;
     });
 
-  const scanResult = scan.data as (typeof scan.data & { source?: string; failedCategories?: string[] }) | undefined;
+  const scanResult = scan.data as (typeof scan.data & {
+    source?: string; failedCategories?: string[]; skippedCategories?: string[];
+    links?: { verified: number; unconfirmed: number; dropped: number; fromFeed: number };
+  }) | undefined;
 
   return (
     <div className="space-y-4">
@@ -234,6 +246,8 @@ export default function SocialListening() {
           Last scan found <span className="text-foreground">{scanResult.scanned}</span> items ·{" "}
           <span className="text-green-400">{scanResult.inserted} new</span> added{scanResult.source ? ` · via ${scanResult.source}` : ""}.
           {scanResult.failedCategories?.length ? <span className="text-amber-300"> Some searches failed ({scanResult.failedCategories.join(", ")}); try again shortly.</span> : null}
+          {scanResult.links?.dropped ? <span> {scanResult.links.dropped} result{scanResult.links.dropped === 1 ? "" : "s"} skipped because the link did not open.</span> : null}
+          {scanResult.skippedCategories?.includes("competitor") ? <span> Add opponents under Political Intelligence → Competitors to monitor them here.</span> : null}
         </div>
       )}
 
@@ -309,6 +323,10 @@ export default function SocialListening() {
                       {m.topic && <span className="px-1.5 py-0.5 bg-secondary/60">{m.topic}</span>}
                       {m.source && <span>· {m.source}</span>}
                       {m.publishedAt && <span>· {m.publishedAt}</span>}
+                      {(() => {
+                        const link = LINK_LABEL[(m as { linkStatus?: string | null }).linkStatus ?? ""];
+                        return link ? <span title={link.title} className={"px-1.5 py-0.5 border " + link.className}>{link.text}</span> : null;
+                      })()}
                     </div>
                   </div>
                   <div className="shrink-0 flex items-start gap-1">
