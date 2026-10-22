@@ -1,5 +1,6 @@
 import { evidenceBundle, evidenceContext, isKenyanNews } from "../lib/kenya-evidence";
 import { campaignWards, currentCampaignProfile } from "@workspace/db";
+import { cleanText } from "../lib/social-text";
 /**
  * No-token fallback for Kaiti Constituency public-information workflows.
  *
@@ -232,7 +233,8 @@ export async function searchFreeMakueniWeb(query: string, opts: { strict?: boole
     }
     const xml = (await response.text()).slice(0, 500_000);
     const blocks = xml.match(/<item>[\s\S]*?<\/item>/gi) ?? [];
-    const decode = (value: string) => value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim();
+    // CDATA, HTML, all entities (including &nbsp;) and decorative Unicode letters (NFKC).
+    const decode = (value: string) => cleanText(value);
     const results: FreeWebResult[] = blocks.slice(0, 8).map((block) => {
       const get = (tag: string) => decode(block.match(new RegExp("<" + tag + ">([\\s\\S]*?)</" + tag + ">", "i"))?.[1] ?? "");
       const title = get("title");

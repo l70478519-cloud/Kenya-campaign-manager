@@ -160,6 +160,7 @@ export default function SocialListening() {
   const scanResult = scan.data as (typeof scan.data & {
     source?: string; failedCategories?: string[]; skippedCategories?: string[];
     links?: { verified: number; unconfirmed: number; dropped: number; fromFeed: number };
+    sources?: { key: string; label: string; ok: boolean; items: number }[];
   }) | undefined;
 
   return (
@@ -248,6 +249,16 @@ export default function SocialListening() {
           {scanResult.failedCategories?.length ? <span className="text-amber-300"> Some searches failed ({scanResult.failedCategories.join(", ")}); try again shortly.</span> : null}
           {scanResult.links?.dropped ? <span> {scanResult.links.dropped} result{scanResult.links.dropped === 1 ? "" : "s"} skipped because the link did not open.</span> : null}
           {scanResult.skippedCategories?.includes("competitor") ? <span> Add opponents under Political Intelligence → Competitors to monitor them here.</span> : null}
+          {scanResult.sources?.length ? (
+            <div className="mt-1">
+              Sources checked:{" "}
+              {scanResult.sources.map((src, i) => (
+                <span key={src.key} className={src.ok ? "" : "text-amber-300"}>
+                  {i ? " · " : ""}{src.label} {src.ok ? `${src.items} stories` : "unavailable"}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
       )}
 

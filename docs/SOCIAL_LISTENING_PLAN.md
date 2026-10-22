@@ -11,12 +11,12 @@ Applies to every campaign on the platform: President, Governor, Senator, Woman R
 | Phase | Area | Done / total |
 |---|---|---|
 | 1 | SL-1 Campaign scope and correctness | 6 / 6 |
-| 1 | SL-2 Free, link-verified sources | 0 / 6 |
+| 1 | SL-2 Free, link-verified sources | 5 / 6 |
 | 1 | SL-3 AI classifies, never invents | 0 / 4 |
 | 1 | KOL-1 Measured KOL scores | 0 / 5 |
 | 2 | SL-4 Paid and official platform access | 0 / 4 |
 | 3 | SL-5 Alerts and rapid response | 0 / 3 |
-| | **Total** | **6 / 28** |
+| | **Total** | **11 / 28** |
 
 ## Review of the current module (main at `7804f7b`)
 
@@ -58,12 +58,12 @@ Applies to every campaign on the platform: President, Governor, Senator, Woman R
 - No stored mention has a link that fails to open.
 
 ### SL-2 Free, link-verified sources
-- [ ] SL-2.1 Collector interface: every source returns the same item shape (title, url, source, published date, text, collector).
-- [ ] SL-2.2 Kenyan news RSS feeds (curated list: national outlets plus county/regional where available).
-- [ ] SL-2.3 GDELT (global news index; English and Swahili).
-- [ ] SL-2.4 YouTube Data API (optional `YOUTUBE_API_KEY`): videos and public comments mentioning the candidate or area.
-- [ ] SL-2.5 Duplicate detection by normalised link and near-identical title; per-source health and item counts.
-- [ ] SL-2.6 Clean free-search summaries: the snippet repeats the headline and HTML entities such as `&nbsp;` aren’t decoded (`searchFreeMakueniWeb`).
+- [x] SL-2.1 Collector interface: every source returns the same item shape (title, url, source, published date, text, collector).
+- [x] SL-2.2 Kenyan news RSS feeds: The Standard, Tuko, Kenyans.co.ke, Capital FM, KBC and Taifa Leo (Swahili), all checked live on 22 Oct 2026. Nation (403), Citizen Digital (400), The Star (404), People Daily (not RSS) and KNA (unreachable) failed the check and are excluded.
+- [ ] SL-2.3 GDELT (global news index): **deferred.** In testing on 22 Oct 2026 it returned HTTP 429 (rate limit) or connection failures, even with requests 12 s apart. Re-test from the Render server before adopting. Swahili is covered meanwhile by Taifa Leo.
+- [x] SL-2.4 YouTube Data API (optional `YOUTUBE_API_KEY`): video titles and descriptions, at most 2 searches (200 quota units) per scan. Viewer comments are deliberately **not** collected: they're personal data of private individuals. Not yet run against the live API (needs a key).
+- [x] SL-2.5 Duplicate detection by normalised link and near-identical title; per-source health and item counts.
+- [x] SL-2.6 Clean free-search summaries: the snippet repeats the headline and HTML entities such as `&nbsp;` aren’t decoded (`searchFreeMakueniWeb`).
 
 ### SL-3 AI classifies, never invents
 - [ ] SL-3.1 Classify each stored mention: sentiment, topic, language (English/Swahili/Sheng/other) and urgency, each with a confidence level. Keyword fallback in free mode, labelled as such.

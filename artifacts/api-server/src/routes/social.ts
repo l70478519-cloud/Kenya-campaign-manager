@@ -8,6 +8,8 @@ import { requireAuth, requirePermission } from "../lib/auth";
 import { searchFreeMakueniWeb, classifySentiment } from "./makueni-free-ai";
 import { searchScope, categoryQueries, categoryPrompt, type CategoryKey, type SearchScope } from "../lib/social-terms";
 import { checkLinks } from "../lib/link-check";
+import { cleanText, cleanSummary, dedupeStories } from "../lib/social-text";
+import { fetchKenyanFeeds, searchYouTube, type SourceHealth, type SourceItem } from "../lib/social-sources";
 
 const router = Router();
 // Social listening is open to every signed-in user (view, search, scan).
@@ -87,7 +89,8 @@ const escapeRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
  */
 function isRelevant(raw: RawMention, category: CategoryKey, scope: SearchScope, competitors: string[]): boolean {
   // Only the item's own text counts; the topic label is ours and would match every item.
-  const text = [raw.summary, raw.url].filter((v): v is string => typeof v === "string").join(" ");
+  // Normalised so decorative letters ("𝗞𝗮𝗶𝘁𝗶") match plain names ("Kaiti").
+  const text = cleanText([raw.summary, raw.url].filter((v): v is string => typeof v === "string").join(" "));
   const terms = category === "candidate" ? [scope.shortName, scope.candidate]
     : category === "competitor" ? competitors
     : scope.national ? ["Kenya", ...scope.placeTerms] : scope.placeTerms;
@@ -117,7 +120,7 @@ async function freeCategoryScan(key: CategoryKey, scope: SearchScope, competitor
     return true;
   }).slice(0, 15).map((item) => ({
     raw: {
-      summary: item.title + (item.snippet ? " — " + item.snippet.slice(0, 180) : ""),
+      summary: cleanSummary(item.title, item.snippet?.slice(0, 220), item.source),
       source: item.source, url: item.url,
       sentiment: classifySentiment(`${item.title} ${item.snippet}`),
       topic: categoryTopic(key, scope),
@@ -128,15 +131,63 @@ async function freeCategoryScan(key: CategoryKey, scope: SearchScope, competitor
   }));
 }
 
+const PUBLIC_RECORD_WORDS = /\b(budget|audit|auditor|public participation|county assembly|tender|procurement|controller of budget|bursary allocation)\b/i;
+
+/**
+ * Sorts a feed or video item into a category by what it names: the
+ * candidate, a listed opponent, or a place in the campaign's area. Items that
+ * name none of these are dropped. National campaigns take only candidate and
+ * opponent items from feeds, since every Kenyan story is "in the area".
+ */
+function categorise(item: SourceItem, scope: SearchScope, competitors: string[]): CategoryKey | null {
+  const text = cleanText(`${item.title} ${item.text}`);
+  const names = (list: string[]) => list.filter(n => n && n.length >= 3).some(n => new RegExp(`\\b${escapeRe(n)}\\b`, "i").test(text));
+  if (names([scope.shortName, scope.candidate])) return "candidate";
+  if (names(competitors)) return "competitor";
+  if (scope.national || !names(scope.placeTerms)) return null;
+  return PUBLIC_RECORD_WORDS.test(text) ? "opponent" : "issues";
+}
+
+/** Kenyan news feeds plus, when YOUTUBE_API_KEY is set, YouTube video search. */
+async function collectFeedsAndVideos(scope: SearchScope, competitors: string[]): Promise<{ items: Collected[]; health: SourceHealth[] }> {
+  const feeds = await fetchKenyanFeeds();
+  const health = [...feeds.health];
+  const found: SourceItem[] = [...feeds.items];
+  const apiKey = process.env.YOUTUBE_API_KEY?.trim();
+  if (apiKey) {
+    const queries = [...categoryQueries("candidate", scope).slice(0, 1), ...categoryQueries("competitor", scope, competitors).slice(0, 1)];
+    const videos = await searchYouTube(queries, { apiKey });
+    found.push(...videos.items);
+    health.push(videos.health);
+  }
+  const items: Collected[] = [];
+  for (const item of found) {
+    const category = categorise(item, scope, competitors);
+    if (!category) continue;
+    items.push({
+      raw: {
+        summary: cleanSummary(item.title, item.text, item.source),
+        source: item.source, url: item.url,
+        sentiment: classifySentiment(`${item.title} ${item.text}`),
+        topic: categoryTopic(category, scope),
+        date: item.publishedAt ?? "",
+      },
+      category,
+      origin: "feed",
+    });
+  }
+  return { items: items.slice(0, 40), health };
+}
+
 /** Records the outcome of one source for this campaign (row-level security scopes the rows). */
-async function recordSourceHealth(sourceKey: string, values: { sourceType: string; failed: boolean; count: number }, now: Date) {
+async function recordSourceHealth(sourceKey: string, values: { sourceType: string; failed: boolean; count: number; error?: string }, now: Date) {
   const set = {
     sourceType: values.sourceType,
     status: values.failed ? "error" : "healthy",
     lastAttemptAt: now,
     ...(values.failed ? {} : { lastSuccessAt: now }),
     lastItemCount: values.count,
-    lastError: values.failed ? "Public-source scan failed for this category; inspect API logs and source availability." : null,
+    lastError: values.failed ? (values.error ?? "Public-source scan failed for this category; inspect API logs and source availability.") : null,
     updatedAt: now,
   };
   // Update-then-insert rather than ON CONFLICT, so this works whether or not
@@ -173,6 +224,11 @@ router.post("/scan", async (req, res) => {
     });
   const freeMode = process.env.MAKUENI_AI_MODE === "free";
   const usedFallback = new Set<string>();
+  // Kenyan news feeds (and YouTube when configured) run alongside the category searches.
+  const extraPromise = collectFeedsAndVideos(scope, competitors).catch((err) => {
+    req.log.error({ err }, "feed and video collection failed");
+    return { items: [] as Collected[], health: [] as SourceHealth[] };
+  });
   const perCategory = await Promise.all(
     categories.map(async (cat): Promise<Collected[]> => {
       if (!freeMode) {
@@ -204,8 +260,8 @@ router.post("/scan", async (req, res) => {
     }),
   );
 
-  const normalized = perCategory
-    .flat()
+  const extra = await extraPromise;
+  const normalized = [...perCategory.flat(), ...extra.items]
     .filter(({ raw, category }) => isRelevant(raw, category, scope, competitors))
     .map(({ raw, category, origin }) => {
       const summary = asStr(raw.summary);
@@ -225,26 +281,17 @@ router.post("/scan", async (req, res) => {
     })
     .filter((m): m is NonNullable<typeof m> => m !== null);
 
-  // Dedupe within this batch (by url, else summary).
-  const seen = new Set<string>();
-  const deduped = normalized.filter((m) => {
-    const key = (m.url ?? m.summary).toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  // Dedupe against already-stored mentions by url.
-  const urls = deduped.map((m) => m.url).filter((u): u is string => !!u);
-  let existingUrls = new Set<string>();
-  if (urls.length > 0) {
-    const rows = await db
-      .select({ url: socialMentionsTable.url })
-      .from(socialMentionsTable)
-      .where(inArray(socialMentionsTable.url, urls));
-    existingUrls = new Set(rows.map((r) => r.url).filter((u): u is string => !!u));
-  }
-  const fresh = deduped.filter((m) => !(m.url && existingUrls.has(m.url)));
+  // One copy of each story across all sources (same link, or the same headline
+  // from different outlets or aggregators), then skip stories already stored.
+  const headline = (summary: string) => summary.split(" — ")[0];
+  const deduped = dedupeStories(normalized.map((m) => ({ ...m, title: headline(m.summary) })));
+  const recent = await db
+    .select({ url: socialMentionsTable.url, summary: socialMentionsTable.summary })
+    .from(socialMentionsTable)
+    .orderBy(desc(socialMentionsTable.scannedAt))
+    .limit(500);
+  const known = recent.filter((r): r is { url: string; summary: string } => !!r.url).map((r) => ({ url: r.url, title: headline(r.summary) }));
+  const fresh = dedupeStories(deduped, known).map(({ title: _title, ...m }) => m);
 
   // Links supplied by the AI must open; dead or unsafe links are dropped.
   const checkedAt = new Date();
@@ -297,6 +344,12 @@ router.post("/scan", async (req, res) => {
     failed: failedCategories.has(cat.key),
     count: deduped.filter((mention) => mention.category === cat.key).length,
   }, now)));
+  await Promise.all(extra.health.map((h) => recordSourceHealth(h.key, {
+    sourceType: h.key === "youtube" ? "youtube_api" : "rss",
+    failed: !h.ok,
+    count: h.items,
+    error: h.error,
+  }, now)));
 
   req.log.info({ scanned: deduped.length, inserted: inserted.length, links: linkSummary }, "social scan complete");
   return res.json({
@@ -305,6 +358,7 @@ router.post("/scan", async (req, res) => {
     failedCategories: [...failedCategories],
     skippedCategories,
     links: linkSummary,
+    sources: extra.health.map(({ key, label, ok, items }) => ({ key, label, ok, items })),
     area: scope.areaLabel || null,
     ...PUBLIC_LISTENING_COVERAGE,
     checkedAt: new Date().toISOString(),
