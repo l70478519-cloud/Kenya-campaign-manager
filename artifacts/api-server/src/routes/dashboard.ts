@@ -1,3 +1,5 @@
+import { evidenceBundle } from "../lib/kenya-evidence";
+import { currentCampaignProfile } from "@workspace/db";
 import { Router } from "express";
 import { db, membersTable, volunteersTable, messageCampaignsTable, canvassVisitsTable, canvassSessionsTable, narrativeMentionsTable, milestonesTable, campaignEventsTable, campaignSettingsTable, warRoomBriefsTable, campaignWards } from "@workspace/db";
 import { sql, eq, gte, inArray, and, or, isNull, isNotNull } from "drizzle-orm";
@@ -5,6 +7,7 @@ import { sql, eq, gte, inArray, and, or, isNull, isNotNull } from "drizzle-orm";
 import { DASHBOARD_OVERVIEW_SQL } from "../lib/dashboard-overview-sql";
 
 const router = Router();
+router.get("/evidence", (req, res) => res.json(evidenceBundle(currentCampaignProfile() ?? {}, typeof req.query.q === "string" ? req.query.q.slice(0, 300) : "")));
 
 router.get("/overview", async (_req, res) => {
   const result = await db.execute(sql.raw(DASHBOARD_OVERVIEW_SQL));

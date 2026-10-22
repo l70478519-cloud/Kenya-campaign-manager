@@ -1,7 +1,9 @@
+import { validRate, historicalTurnout } from "../lib/electoral-evidence-quality";
+import { evidenceBundle } from "../lib/kenya-evidence";
 import { Router } from "express";
 import { db, campaignWards, currentCampaignProfile } from "@workspace/db";
 import { sql, type SQL } from "drizzle-orm";
-import { KAITI_REGISTERED_VOTERS_2022, KAITI_REGISTER_SOURCE, KAITI_FACTS, MAKUENI_2022_PRESIDENTIAL } from "../data/kaiti-facts";
+import { KAITI_REGISTERED_VOTERS_2022, KAITI_REGISTER_SOURCE, KAITI_FACTS } from "../data/kaiti-facts";
 
 /**
  * Path to victory: ward-by-ward win arithmetic built only from data the
@@ -27,7 +29,7 @@ type WardOut = {
   poll: { responses: number; ourShare: number; leader: string; leaderShare: number; undecidedShare: number } | null;
   canvass: { contacts: number; supportShare: number; undecidedShare: number; opposedShare: number } | null;
   volunteers: number; events90d: number;
-  expectedTurnoutPct: number; projectedVotes: number | null;
+  expectedTurnoutPct: number | null; projectedVotes: number | null;
   targetShare: number; estimatedShare: number | null; estimateSource: string | null;
   votesToGain: number | null;
   contactsPer1000: number | null;
@@ -43,7 +45,7 @@ export async function computeWinAnalysis() {
   const ourKey = norm(candidate).split(" ").slice(-1)[0] ?? "";
   const isOurs = (name: string) => !!ourKey && norm(name).includes(ourKey);
   const seat = (profile?.seat ?? "MP").toUpperCase();
-  const isKaiti = (profile?.constituency ?? "").toLowerCase() === "kaiti";
+  const isKaiti = (profile?.constituency ?? "").toLowerCase() === "kaiti" && /makueni/i.test(profile?.county ?? "");
 
   // ── Registers and stations ────────────────────────────────────────────────
   const stations = await rows<{ ward: string; n: number; registered: number }>(sql`
@@ -55,7 +57,7 @@ export async function computeWinAnalysis() {
       COALESCE((data->>'votes')::numeric,0)::int AS votes, NULLIF(data->>'registeredVoters','')::int AS registered
     FROM public.kaiti_records WHERE module='election-history' AND deleted_at IS NULL`);
   const seatHistory = history.filter(h => (h.seat ?? "").toUpperCase() === seat);
-  const usable = seatHistory.length ? seatHistory : history;
+  const usable = seatHistory; // Never substitute results from a different office.
   const lastYear = usable.reduce((m, h) => Math.max(m, h.year ?? 0), 0) || null;
   const last = usable.filter(h => h.year === lastYear);
   const lastSeat = last[0]?.seat ?? seat;
@@ -113,7 +115,7 @@ export async function computeWinAnalysis() {
       const ours = cands.find(c => isOurs(c.name));
       lastElection = {
         year: lastYear!, seat: lastSeat, totalVotes: total,
-        turnoutPct: registered && total ? pct(total / registered) : null,
+        turnoutPct: historicalTurnout(total, histRegistered),
         winner: cands[0]?.name ?? "—", winnerShare: cands[0]?.share ?? 0,
         ourShare: ours ? ours.share : null, candidates: cands.slice(0, 6),
       };
@@ -142,11 +144,9 @@ export async function computeWinAnalysis() {
       opposedShare: pct(levels.filter(c => OPPOSED.has(c.level!)).reduce((s, c) => s + c.n, 0) / contacts),
     } : null;
 
-    // Ward assumption > last ward result > Makueni's actual 2022 turnout (61%) as the evidence-based default.
-    const isMakueni = /makueni/i.test(profile?.county ?? "");
-    const expectedTurnoutPct = turnout.find(t => sameWard(t.ward, ward))?.rate
-      ?? (lastElection?.turnoutPct ? Math.round(lastElection.turnoutPct) : isMakueni ? Math.round(MAKUENI_2022_PRESIDENTIAL.turnoutPct) : 65);
-    const projectedVotes = registered ? Math.round(registered * expectedTurnoutPct / 100) : null;
+    // Only an explicitly recorded assumption or this ward's same-election historical rate is usable.
+    const expectedTurnoutPct = validRate(turnout.find(t => sameWard(t.ward, ward))?.rate) ?? lastElection?.turnoutPct ?? null;
+    const projectedVotes = registered && expectedTurnoutPct !== null ? Math.round(registered * expectedTurnoutPct / 100) : null;
 
     // Target: beat the strongest rival with a 3-point cushion (first past the post), within sane bounds.
     const rivalShare = Math.max(
@@ -245,7 +245,7 @@ export async function computeWinAnalysis() {
     campaign: { name: profile?.name ?? "", candidate, seat, constituency: profile?.constituency ?? "" },
     summary: {
       registered: totalRegistered || null,
-      projectedVotes: projected || null,
+      projectedVotes: out.length && out.every(w => w.projectedVotes !== null) ? projected : null,
       estimatedVotes: known.length ? Math.round(estimatedVotes) : null,
       estimatedShare: coveredProjected ? pct(estimatedVotes / coveredProjected) : null,
       wardsWithData: known.length, wards: out.length,
@@ -255,19 +255,21 @@ export async function computeWinAnalysis() {
     candidates, wards: out,
     swot: { strengths: S.slice(0, 6), weaknesses: W.slice(0, 6), opportunities: O.slice(0, 6), threats: T.slice(0, 6) },
     dataGaps: [
+      ...(out.some(w => w.expectedTurnoutPct === null) ? ["Ward turnout evidence missing: no default projection is supplied for those wards"] : []),
       ...(lastYear ? [] : ["Historical election results (IEBC Forms 34A/35A)"]),
       ...(stations.length ? [] : ["Polling stations with registered voters (IEBC register per polling station)"]),
       ...(candidatePolls.length ? [] : [`A campaign poll that lists ${candidate} among the options`]),
       ...(canvass.length ? [] : ["Canvass returns with support levels"]),
     ],
-    sources: [KAITI_REGISTER_SOURCE, `Default turnout ${MAKUENI_2022_PRESIDENTIAL.turnoutPct}%: ${MAKUENI_2022_PRESIDENTIAL.source}`, ...(lastYear ? [`Historical Election Results module (${lastYear})`] : []), "Campaign polls, canvass, members and volunteers in KaitiOS"],
+    methodology: "Conditional arithmetic, not a validated election forecast. Contact records and convenience polls are not representative electorate samples. No national or county turnout default is assigned to a ward.",
+    sources: [...(isKaiti ? [KAITI_REGISTER_SOURCE] : []), ...(lastYear ? [`Historical Election Results module (${lastYear}, ${seat})`] : []), "Active campaign records and explicitly saved assumptions"],
   };
 }
 
 export type WinAnalysis = Awaited<ReturnType<typeof computeWinAnalysis>>;
 
 router.get("/win", async (_req, res) => {
-  res.json(await computeWinAnalysis());
+  res.json({ ...await computeWinAnalysis(), evidence: evidenceBundle(currentCampaignProfile() ?? {}, "electoral records planning") });
 });
 
 /** Plain-text digest of the win analysis for AI prompts and no-token answers. */

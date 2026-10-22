@@ -1,3 +1,4 @@
+import { KenyaEvidencePanel } from "@/components/kenya-evidence-panel";
 import { WARDS as CAMPAIGN_WARDS, CAMPAIGN } from "@/lib/wards";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -193,6 +194,7 @@ export default function Speeches() {
 
   return (
     <div className="space-y-6">
+      <KenyaEvidencePanel />
       <div>
         <h1 className="text-xl font-bold tracking-wider flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-primary" /> AI SPEECH &amp; MANIFESTO GENERATOR

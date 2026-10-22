@@ -9,7 +9,7 @@ type Ward = {
   lastElection: { year: number; turnoutPct: number | null; winner: string; winnerShare: number; ourShare: number | null } | null;
   poll: { responses: number; ourShare: number; leader: string; leaderShare: number; undecidedShare: number } | null;
   canvass: { contacts: number; supportShare: number; undecidedShare: number; opposedShare: number } | null;
-  volunteers: number; events90d: number; expectedTurnoutPct: number; projectedVotes: number | null;
+  volunteers: number; events90d: number; expectedTurnoutPct: number | null; projectedVotes: number | null;
   targetShare: number; estimatedShare: number | null; estimateSource: string | null; votesToGain: number | null;
   contactsPer1000: number | null; status: "stronghold" | "lean" | "battleground" | "behind" | "no-data"; actions: string[];
 };
@@ -104,7 +104,7 @@ export function PathToWin() {
             </div>
             <dl className="grid grid-cols-3 gap-2 text-xs">
               <div><dt className="text-muted-foreground">Votes to gain</dt><dd className="font-semibold tabular-nums">{n(w.votesToGain)}</dd></div>
-              <div><dt className="text-muted-foreground">Expected turnout</dt><dd className="font-semibold">{w.expectedTurnoutPct}%</dd></div>
+              <div><dt className="text-muted-foreground">Expected turnout</dt><dd className="font-semibold">{w.expectedTurnoutPct == null ? "Not available" : `${w.expectedTurnoutPct}%`}</dd></div>
               <div><dt className="text-muted-foreground">Contacts /1,000</dt><dd className="font-semibold">{w.contactsPer1000 ?? "—"}</dd></div>
             </dl>
             {(w.lastElection || w.poll) && <p className="text-xs text-muted-foreground">

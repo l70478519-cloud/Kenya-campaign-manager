@@ -1,3 +1,4 @@
+import { evidenceBundle, evidenceContext, isKenyanNews } from "../lib/kenya-evidence";
 import { campaignWards, currentCampaignProfile } from "@workspace/db";
 /**
  * No-token fallback for Kaiti Constituency public-information workflows.
@@ -9,154 +10,21 @@ import { campaignWards, currentCampaignProfile } from "@workspace/db";
 export function buildFreeMakueniAnswer(input: {
   message: string;
   module?: string;
+  operationalDigest?: string;
   context?: Record<string, unknown>;
   liveSources?: Array<{ title: string; url: string; checkedAt: string; excerpt: string; status: string }>;
 }): string {
-  const message = input.message.trim();
-  const lower = message.toLowerCase();
-  const context = input.context ?? {};
-  const liveSources = input.liveSources ?? [];
-  const historicalCidpContext = typeof context.historicalCidpContext === "string" ? context.historicalCidpContext : "";
-  const webResults = Array.isArray(context.publicWebResults)
-    ? (context.publicWebResults as Array<{ title?: string; url?: string; source?: string; publishedAt?: string | null; snippet?: string }>)
-        .filter((item) => item && typeof item.title === "string" && typeof item.url === "string")
-        .slice(0, 5)
-    : [];
-
-  const profile = currentCampaignProfile();
-  const place = profile?.constituency ?? "your area";
-  const county = profile?.county ?? "";
-  const isPrimary = !!profile?.isPrimary;
-  const wards = campaignWards();
-  const ward = wards.find((name) => lower.includes(name.toLowerCase())) ??
-    (lower.match(/(?:in|for|at|about)\s+([a-z][a-z /-]{1,35}?)\s+ward\b/i)?.[1]?.trim() ?? "");
-  const area = ward ? ward.replace(/\b\w/g, (letter) => letter.toUpperCase()) : `${place} Constituency`;
-
-  // Answer factual questions directly instead of falling through to service-delivery templates.
-  if (/\b(population|how many people|number of residents|census|people live)\b/.test(lower)) {
-    return [
-      `You asked about the population of ${area}.`,
-      "I do not have a verified KNBS census population figure for this area in the available data, so I cannot give a reliable number.",
-      "The appropriate source is the Kenya National Bureau of Statistics (KNBS) 2019 Population and Housing Census, with the census year and geographic boundary stated alongside any figure.",
-      "This is a population question, not a service-delivery or project-status request.",
-    ].join("\n");
-  }
-
-  let issue = "general service delivery";
-  let practicalSteps = [
-    "List the three most urgent issues residents report and the exact village/facility/road affected.",
-    "Check the county project tracker and current ward profile for an existing project, budget and latest recorded status.",
-    "Agree on the responsible department, a named follow-up officer, evidence needed and a date to report back to residents.",
-  ];
-  if (/water|borehole|dam|irrigat|pipe|dry tap/.test(lower)) {
-    issue = "water and irrigation";
-    practicalSteps = [
-      "Map the affected water point or pipeline and record whether it is broken, unreliable, unfinished or inaccessible.",
-      "Check the county project tracker for the scheme, budget, contractor/milestone and last recorded update; do not assume a project is complete from its allocation.",
-      "Refer repairs or supply gaps to the responsible water office, set an inspection date and publish a clear update for affected villages.",
-    ];
-  } else if (/road|bridge|murram|transport|access|culvert/.test(lower)) {
-    issue = "roads and access";
-    practicalSteps = [
-      "Identify the exact road section, damaged points and villages/facilities it connects; add dated photos or an inspection report.",
-      "Check whether grading, drainage, gravelling or a bridge/culvert is already listed in the ward project records and verify its implementation status.",
-      "Prioritise sections that block access to schools, health facilities, markets or emergency services, then record the responsible office and inspection date.",
-    ];
-  } else if (/health|hospital|clinic|dispensary|medicine|drug|ambulance/.test(lower)) {
-    issue = "health services";
-    practicalSteps = [
-      "Name the affected health facility and the specific gap: staffing, opening hours, essential medicines, equipment, water or referral access.",
-      "Verify the issue with a dated facility or county health report; avoid sharing identifiable patient information.",
-      "Refer the gap to the responsible health office and agree on an update date and a way residents can report whether service has improved.",
-    ];
-  } else if (/school|education|bursary|classroom|teacher|ecde/.test(lower)) {
-    issue = "education";
-    practicalSteps = [
-      "Identify the school/ECDE centre and the concrete need, such as classroom safety, water, sanitation, learning materials or bursary access.",
-      "Check the current education project list and published bursary criteria; do not promise funding or eligibility without an official notice.",
-      "Record the responsible office, the action required and the date parents/community members will receive a progress update.",
-    ];
-  } else if (/agricultur|mango|livestock|farmer|market|crop|drought|feed/.test(lower)) {
-    issue = "agriculture and livelihoods";
-    practicalSteps = [
-      "Identify the crop/livestock or market problem and the affected farmer group/villages, including the current season.",
-      "Check current county agriculture advisories, extension support, water access and market information before recommending a specific intervention.",
-      "Coordinate a practical follow-up with the relevant extension officer or cooperative and record what support is available, eligibility and timing.",
-    ];
-  } else if (/budget|spend|finance|allocation|fund|project cost/.test(lower)) {
-    issue = "budget and project delivery";
-    practicalSteps = [
-      "Find the project in the approved budget/ward profile and record the financial year, department and approved allocation.",
-      "Separately verify releases, expenditure, implementation milestones and actual outputs; an allocation alone does not prove work was done.",
-      "Ask the responsible office for the latest dated progress report and record any discrepancy for public follow-up.",
-    ];
-  }
-
-  const resultsSection = webResults.length
-    ? [
-        "Recent public-web leads to check:",
-        ...webResults.map((item, index) =>
-          `${index + 1}. ${item.title}${item.source ? ` — ${item.source}` : ""}${item.publishedAt ? ` (${item.publishedAt})` : ""}\n   ${item.url}${item.snippet ? `\n   ${item.snippet}` : ""}`
-        ),
-      ]
-    : ["I could not retrieve matching public-news results just now, so I will not claim a particular project is delayed, funded or completed."];
-
-  const manifestoRelevant = isPrimary && /manifesto|restore the promise|pillar|markets?|price|farm|agricultur|livelihood|water|health|clinic|hospital|development|governance|budget|accountab/i.test(lower);
-  const manifestoSection = manifestoRelevant ? [
-    "Draft manifesto reference (CONFIDENTIAL — NOT FOR CIRCULATION):",
-    "The Restore the Promise 2027–2032 draft groups proposed commitments into five pillars: Nduani/development close to people; markets, price and opportunity; water that lasts; agriculture and livelihoods; healthcare that works. Open and accountable government is the foundation.",
-    "Use these as proposed policy commitments, not completed achievements or guaranteed outcomes. The draft's ward-priority figures and statistics need source/date checks before public use.",
-  ] : [];
-
-  const kaitiFacts = typeof context.kaitiFacts === "string" ? context.kaitiFacts : "";
-  const winPriorities = Array.isArray(context.winPriorities) ? (context.winPriorities as { ward: string; status: string; actions: string[]; votesToGain: number | null }[]) : [];
-  const prioritySection = winPriorities.length ? [
-    "Where to focus to win (from your campaign data):",
-    ...winPriorities.map((w, i) => `${i + 1}. ${w.ward} — ${w.status.replace("-", " ")}${w.votesToGain ? `, about ${w.votesToGain.toLocaleString()} votes to gain` : ""}. ${w.actions.join(" ")}`),
-    "See Strategic SWOT → Path to victory for every ward.",
-  ] : [];
-  const factsSection = kaitiFacts ? ["What the county plans record about Kaiti:", kaitiFacts] : [];
-  // Strategy questions get the ward plan first, not the service-delivery checklist.
-  if (prioritySection.length && /\b(win|winning|focus|strateg|votes?|battleground|stronghold|priorit|which ward|where should)/i.test(lower)) {
-    return [
-      `Here is where ${profile?.candidateName ?? "the campaign"} should focus, ranked by how much each ward can change the result:`,
-      "",
-      ...prioritySection,
-      ...(factsSection.length ? ["", ...factsSection] : []),
-      "",
-      "These figures come from your imported results, polls and canvass returns; wards marked 'no data' need a poll or canvass before they can be judged.",
-    ].join("\n");
-  }
-  const official = /makueni/i.test(county) ? [
-    "Official places to verify local details:",
-    "- Makueni Project Monitoring and Tracking System: https://pmts.makueni.go.ke/v2/",
-    "- County budget and public-finance documents: https://makueni.go.ke/public-finance-management/",
-    "- County documents and ward profiles: https://makueni.go.ke/county-documents/",
-  ] : [
-    "Official places to verify local details:",
-    `- ${county} County Government website: budgets, CIDP and ward development reports`,
-    "- Controller of Budget county reports: https://cob.go.ke/reports/",
-    "- NG-CDF constituency project records: https://www.ngcdf.go.ke/",
-  ];
-
+  const scope = currentCampaignProfile() ?? {};
+  const bundle = evidenceBundle(scope, input.message);
+  const web = Array.isArray(input.context?.publicWebResults) ? (input.context.publicWebResults as FreeWebResult[]).filter(item => isKenyanNews(item, scope)).slice(0, 5) : [];
   return [
-    `For ${area}, I would start with ${issue}. Here is a practical way to move it forward:`,
-    "",
-    ...practicalSteps.map((step, index) => `${index + 1}. ${step}`),
-    "",
-    webResults.length
-      ? "I found these public-news leads that may be relevant. They are not confirmation of the situation in this specific ward; open each source and check the date and location."
-      : "I do not have enough verified, ward-specific evidence to say which project is currently failing or what funding is available. The steps above are a practical checklist, not a claim that these problems are confirmed in this ward.",
-    "",
-    ...(prioritySection.length ? [...prioritySection, ""] : []),
-    ...(factsSection.length ? [...factsSection, ""] : []),
-    ...resultsSection,
-    ...(manifestoSection.length ? ["", ...manifestoSection] : []),
-    ...(historicalCidpContext && /makueni/i.test(county) ? ["", "Historical source — Makueni CIDP 2013-2017 (not current data or project status):", historicalCidpContext] : []),
-    "",
-    ...official,
-    ...(liveSources.length ? ["", "Official pages checked:", ...liveSources.slice(0, 3).map((source) => `- ${source.title}: ${source.url} (checked ${source.checkedAt}; ${source.status})`)] : []),
-  ].join("\n");
+    "Kenya evidence brief — reviewed summaries, not a live AI investigation.",
+    ...(input.operationalDigest && /record|member|volunteer|task|donation|activity|dashboard|count|milestone|event/i.test(input.message) ? ["Server-generated operational record summary (not representative population data):", input.operationalDigest] : []),
+    evidenceContext(scope, input.message),
+    ...(web.length ? ["Unverified Kenya web-discovery leads (verify originals before using claims):", ...web.map(w => `${w.title} — ${w.url}`)] : []),
+    "Next steps: check the source page and period, obtain current local measurements, identify the responsible institution, and label proposals separately from established outcomes.",
+    ...bundle.limitations,
+  ].join("\n\n");
 }
 
 type SpeechInput = {
@@ -224,7 +92,7 @@ export function buildFreeMakueniSpeech(input: SpeechInput): { title: string; spe
   const place = profile?.constituency ?? "your area";
   const seat = profile?.seat ?? "MP";
   const year = profile?.electionDate?.slice(0, 4) ?? "2027";
-  const constituencyLabel = `${place} Constituency`;
+  const constituencyLabel = /president/i.test(seat) ? "Kenya" : /governor|senator|woman/i.test(seat) ? `${profile?.county ?? place} County` : /mca/i.test(seat) ? `${campaignWards()[0] ?? place} Ward` : `${place} Constituency`;
   const rawArea = (input.area ?? "").trim();
   const isWard = !!rawArea && !/constituency|county/i.test(rawArea);
   const areaLabel = isWard ? `${rawArea} Ward` : constituencyLabel;
@@ -306,6 +174,7 @@ export function buildFreeMakueniSpeech(input: SpeechInput): { title: string; spe
     title: `${candidate} — ${occasion} — ${isWard ? rawArea : place}`,
     speech,
     notes: [
+      evidenceContext(profile ?? {}, topic),
       `Written for about ${minutes} minute(s). Read it aloud and adjust to the occasion.`,
       "Commitments are written as plans if elected, not as funded or delivered projects.",
       "Verify local project names, figures, costs and current status before delivery.",
@@ -353,10 +222,10 @@ export async function searchFreeMakueniWeb(query: string, opts: { strict?: boole
   if (cached && cached.expiresAt > Date.now()) return cached.results;
   const county = currentCampaignProfile()?.county ?? "";
   // Quoted names and site: filters are already precise; broad queries get the county for local relevance.
-  const suffix = /["]|site:/i.test(cleaned) || new RegExp(county, "i").test(cleaned) ? " Kenya" : ` ${county} Kenya`;
+  const suffix = county && !cleaned.toLowerCase().includes(county.toLowerCase()) ? ` ${county} Kenya` : " Kenya";
   const rssUrl = "https://news.google.com/rss/search?q=" + encodeURIComponent(cleaned + suffix) + "&hl=en-KE&gl=KE&ceid=KE:en";
   try {
-    const response = await fetch(rssUrl, { headers: { "User-Agent": "Mozilla/5.0 (compatible; MakueniPublicInfo/1.0)" }, signal: AbortSignal.timeout(6000) });
+    const response = await fetch(rssUrl, { headers: { "User-Agent": "Mozilla/5.0 (compatible; KenyaEvidenceReader/1.0)" }, signal: AbortSignal.timeout(6000) });
     if (!response.ok) {
       if (opts.strict) throw new Error(`News search returned HTTP ${response.status}`);
       return [];
@@ -372,7 +241,7 @@ export async function searchFreeMakueniWeb(query: string, opts: { strict?: boole
       const source = decode(block.match(/<source[^>]*>([\s\S]*?)<\/source>/i)?.[1] ?? "Google News");
       const description = get("description").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 400);
       return { title, url: link, source, publishedAt: pubDate || null, snippet: description, query: cleaned };
-    }).filter((item) => item.title && /^https?:\/\//i.test(item.url));
+    }).filter((item) => item.title && /^https?:\/\//i.test(item.url) && isKenyanNews(item, currentCampaignProfile() ?? {}));
     searchCache.set(cacheKey, { expiresAt: Date.now() + 10 * 60_000, results });
     return results;
   } catch (err) {
@@ -382,51 +251,9 @@ export async function searchFreeMakueniWeb(query: string, opts: { strict?: boole
   }
 }
 
-let sourceCache: { expiresAt: number; items: PublicSourceSnapshot[] } | null = null;
-const PUBLIC_MAKUENI_SOURCES = [
-  { title: "Makueni Project Monitoring and Tracking System", url: "https://pmts.makueni.go.ke/v2/" },
-  { title: "Makueni County Public Finance Management documents", url: "https://makueni.go.ke/public-finance-management/" },
-  { title: "Makueni County downloads and ward profiles", url: "https://makueni.go.ke/county-documents/" },
-];
-
-/**
- * Token-free source retrieval from fixed, official public URLs. This fetches
- * public page snippets and links only; it does not claim a project is complete
- * merely because a portal is reachable. Cache successful and failed checks for
- * 15 minutes to avoid hammering county sites.
- */
+/** Reviewed fixed source registry. This does not imply a fresh fetch or current project status. */
 export async function fetchMakueniOfficialSources(): Promise<PublicSourceSnapshot[]> {
-  // These are Makueni County portals; campaigns in other counties get none rather than wrong ones.
-  if (!/makueni/i.test(currentCampaignProfile()?.county ?? "")) return [];
-  if (sourceCache && sourceCache.expiresAt > Date.now()) return sourceCache.items;
-  const checkedAt = new Date().toISOString();
-  const items = await Promise.all(PUBLIC_MAKUENI_SOURCES.map(async (source) => {
-    try {
-      const response = await fetch(source.url, {
-        headers: { "User-Agent": "ProKalokiCommandCentre/1.0 (public-source reader)" },
-        signal: AbortSignal.timeout(5000),
-      });
-      if (!response.ok) {
-        return { ...source, checkedAt, status: `HTTP ${response.status}`, excerpt: "Source page could not be read; open the official URL to verify." };
-      }
-      const html = (await response.text()).slice(0, 1_000_000);
-      const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-      const title = titleMatch?.[1]?.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&#8211;|&ndash;/g, "–").replace(/\s+/g, " ").trim() || source.title;
-      const text = html
-        .replace(/<script[\s\S]*?<\/script>/gi, " ")
-        .replace(/<style[\s\S]*?<\/style>/gi, " ")
-        .replace(/<[^>]+>/g, " ")
-        .replace(/&nbsp;/g, " ")
-        .replace(/&amp;/g, "&")
-        .replace(/&#8217;|&rsquo;/g, "'")
-        .replace(/&#8211;|&ndash;/g, "–")
-        .replace(/\s+/g, " ")
-        .trim();
-      return { ...source, title, checkedAt, status: "reachable", excerpt: text.slice(0, 1100) || "Page reachable, but no readable text was extracted." };
-    } catch {
-      return { ...source, checkedAt, status: "unreachable", excerpt: "Live fetch failed or timed out. Open the official URL to check manually." };
-    }
-  }));
-  sourceCache = { expiresAt: Date.now() + 15 * 60 * 1000, items };
-  return items;
+  const scope = currentCampaignProfile() ?? {};
+  const bundle = evidenceBundle(scope);
+  return bundle.sources.map(source => ({ title: source.title, url: source.url, checkedAt: bundle.reviewedOn, status: source.status === "reviewed" ? "reviewed-snapshot" : source.status, excerpt: `${source.period}. ${source.note ?? "Reviewed source metadata; see the original document for the complete text."}` }));
 }

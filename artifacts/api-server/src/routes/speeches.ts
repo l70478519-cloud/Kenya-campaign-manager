@@ -1,3 +1,4 @@
+import { evidenceBundle, evidenceContext } from "../lib/kenya-evidence";
 import { Router } from "express";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { db, generatedDocumentsTable, insertGeneratedDocumentSchema, campaignWards, currentCampaignProfile } from "@workspace/db";
@@ -7,6 +8,7 @@ import { CAMPAIGN_CONTEXT } from "./ai";
 import { requireAuth } from "../lib/auth";
 import { buildFreeMakueniSpeech, searchFreeMakueniWeb } from "./makueni-free-ai";
 
+const topicForEvidence = (body: Record<string, unknown>) => [body.topic, body.keyPoints, body.priorityIssues, body.currentGaps].filter(x => typeof x === "string").join(" ");
 const router = Router();
 // Generated speeches and their source material are internal-only.
 router.use(requireAuth);
@@ -49,13 +51,6 @@ async function generateSection(system: string, user: string, maxTokens: number):
   }
 }
 
-const KAITI_SOURCE_NOTES = [
-"Uploaded draft manifesto p.4 historical ward priorities: Ilima—farm inputs/extension, post-harvest losses, insecurity; Kee—markets/prices, energy access, youth livelihoods; Kilungu—roads, farm inputs/extension, broken water assets; Ukia—water scarcity, insecurity, sanitation.",
-"Draft manifesto pp.8–9 markets and enterprise; pp.10–11 water and repair; pp.12–13 agriculture; pp.13–14 healthcare; p.15 public participation. These are proposals from a county-level draft, NOT approved commitments by Hon. Job Tuta.",
-"Makueni CIDP 2018–2022: historical county development baseline. Makueni CIDP 2023–2027: county planning priorities for water, roads, agriculture, health, markets and education. County-wide figures cannot establish present Kaiti ward conditions.",
-"Require original source checks, dated evidence, accurate institutional mandates and measurable indicators. MP functions include legislation, representation and oversight; county executive delivery cannot be represented as an MP's unilateral power. Keep confidential source material internal."
-].join("\n");
-
 const LENGTH_WORDS: Record<string, number> = {
   short: 90,
   medium: 170,
@@ -96,13 +91,13 @@ router.post("/generate", async (req, res) => {
     return;
   }
 
-  const base = `${CAMPAIGN_CONTEXT}\n\nDOCUMENT RESEARCH NOTES (historical, not verified current facts):\n${KAITI_SOURCE_NOTES}
+  const base = `${CAMPAIGN_CONTEXT}\n\nDOCUMENT RESEARCH NOTES (historical, not verified current facts):\n${evidenceContext(currentCampaignProfile() ?? {}, [topicForEvidence(req.body)].join(" "))}
 
-You are drafting a policy-focused public address for Hon. Job Tuta, a 2027 Kaiti MP CANDIDATE, not an incumbent MP. Use a ${tone.toLowerCase()} tone.
+You are drafting a policy-focused public address for the configured candidate, a configured Kenyan election aspirant, not an incumbent MP. Use a ${tone.toLowerCase()} tone.
 Language: ${language} (if "Swahili" write in Swahili; if a mix, blend naturally as Kenyan politicians do).
-Occasion: ${occasion}. Audience: ${audience || "the people of Kaiti"}. Ward focus: ${ward}.
-Write only the public information text for the requested part. The speech is in Hon. Job Tuta's voice as a candidate explaining his proposed plan if elected. Describe intended actions as future commitments, not completed achievements. If currentGaps are supplied, present them as documented service-delivery gaps only when the user provides a credible source/date; attribute claims and avoid unsupported accusations. If no evidence is supplied, discuss the need for public performance reporting without asserting specific government failures.
-Do not use incumbent-government phrasing such as "my administration has delivered", "we have launched", "our county government implemented", or "as your MP" as a present fact. Use prospective wording such as "my proposal", "if elected", "I intend to", and "I would seek to", without implying guaranteed funding or delivery. Historical positions must be explicitly identified as past roles. Ground it in the manifesto themes and Kaiti Constituency services. Do not invent statistics, project failures, motives or outcomes.`;
+Occasion: ${occasion}. Audience: ${audience || "residents of the selected area"}. Ward focus: ${ward}.
+Write only the public information text for the requested part. The speech is in the configured candidate's voice as a candidate explaining his proposed plan if elected. Describe intended actions as future commitments, not completed achievements. If currentGaps are supplied, present them as documented service-delivery gaps only when the user provides a credible source/date; attribute claims and avoid unsupported accusations. If no evidence is supplied, discuss the need for public performance reporting without asserting specific government failures.
+Do not use incumbent-government phrasing such as "my administration has delivered", "we have launched", "our county government implemented", or "as your MP" as a present fact. Use prospective wording such as "my proposal", "if elected", "I intend to", and "I would seek to", without implying guaranteed funding or delivery. Historical positions must be explicitly identified as past roles. Ground it in the manifesto themes and the selected campaign area services. Do not invent statistics, project failures, motives or outcomes.`;
 
   const pointsLine = keyPoints ? `\nCandidate's proposed commitments to explain as actions if elected: ${keyPoints}` : "";
   const gapsLine = currentGaps ? `\nCurrent administration service gaps supplied for evidence-led discussion: ${currentGaps}. Treat as claims to verify; attribute them to the supplied source/date and do not embellish. If the source/date is absent, phrase them as concerns requiring verification.` : "\nNo specific evidence about current administration failures was supplied. Do not invent failures; instead say the candidate will publish baselines, budgets, milestones and progress reports so residents can assess performance.";
@@ -113,7 +108,7 @@ Do not use incumbent-government phrasing such as "my administration has delivere
     [opening, body, close] = await Promise.all([
       generateSection(
         base,
-        `Write the OPENING of the speech (~${Math.round(words * 0.35)} words): introduce Hon. Job Tuta as Kaiti Constituency MP candidate for 2027, greet leaders and residents, and state that he is outlining what he aims to accomplish if elected. Do not claim the plan is already delivered.`,
+        `Write the OPENING of the speech (~${Math.round(words * 0.35)} words): introduce the configured candidate as the selected campaign area MP candidate for 2027, greet leaders and residents, and state that he is outlining what he aims to accomplish if elected. Do not claim the plan is already delivered.`,
         480,
       ),
       generateSection(
@@ -147,7 +142,7 @@ Do not use incumbent-government phrasing such as "my administration has delivere
   const [saved] = await db.insert(generatedDocumentsTable).values({
     docType: "speech", title, occasion, audience, ward, language, tone, body: fullBody,
   }).returning();
-  res.json({ title, body: fullBody, mode: "ai", documentId: saved?.id });
+  res.json({ title, body: fullBody, mode: "ai", documentId: saved?.id, evidence: evidenceBundle(currentCampaignProfile() ?? {}, keyPoints) });
 });
 
 type SpeechArgs = { occasion: string; audience: string; ward: string; language: string; tone: string; keyPoints: string; currentGaps: string; length: "short" | "medium" | "long" };
@@ -189,7 +184,7 @@ function freeManifesto(language: string, tone: string, priorityIssues: string) {
   const candidate = (p?.candidateName ?? (p && !p.isPrimary ? "the candidate" : "the candidate"));
   const wards = campaignWards();
   const issues = priorityIssues.split(/\n|;|,/).map(x => x.trim()).filter(Boolean).slice(0, 8);
-  const title = `${place} Constituency Development Priorities Brief`;
+  const title = `${/president/i.test(p?.seat ?? "") ? "Kenya" : /governor|senator|woman/i.test(p?.seat ?? "") ? `${p?.county ?? place} County` : place} Development Priorities Brief`;
   const body = [
     `# ${title}`,
     `Prepared for ${candidate}${p?.seat ? `, ${p.seat} candidate` : ""}. Language: ${language}. Tone: ${tone}.`,
@@ -200,6 +195,8 @@ function freeManifesto(language: string, tone: string, priorityIssues: string) {
     ...(issues.length ? ["## Priority issues raised", ...issues.map((x, i) => `${i + 1}. ${x}`)] : []),
     "## Ward-by-ward follow-up",
     ...wards.map(w => `- ${w}: record the three most urgent issues, the responsible office and a report-back date after each public forum.`),
+    "## Source evidence and limitations",
+    evidenceContext(p ?? {}, priorityIssues),
     "## Verification note",
     "This template does not establish that any project or allocation is approved, funded or completed. Check current figures against dated official records before publication.",
   ].join("\n\n");
@@ -219,7 +216,7 @@ const PILLARS = [
   },
   {
     key: "Infrastructural Development",
-    hint: "roads, clean water, schools, health facilities and public infrastructure across Kaiti's four wards.",
+    hint: "roads, clean water, schools, health facilities and public infrastructure across the configured campaign area.",
   },
   {
     key: "Constitutional Mandate",
@@ -247,15 +244,15 @@ router.post("/manifesto", async (req, res) => {
 
   if (process.env.MAKUENI_AI_MODE === "free") {
     const m = freeManifesto(language, tone, priorityIssues);
-    res.json({ ...m, mode: "free-template" });
+    res.json({ ...m, mode: "free-template", evidence: evidenceBundle(currentCampaignProfile() ?? {}, priorityIssues) });
     return;
   }
 
-  const base = `${CAMPAIGN_CONTEXT}\n\nDOCUMENT RESEARCH NOTES (historical, not verified current facts):\n${KAITI_SOURCE_NOTES}
+  const base = `${CAMPAIGN_CONTEXT}\n\nDOCUMENT RESEARCH NOTES (historical, not verified current facts):\n${evidenceContext(currentCampaignProfile() ?? {}, [topicForEvidence(req.body)].join(" "))}
 
-You are drafting a prospective county development policy platform for Hon. Job Tuta, a candidate seeking election as Kaiti MP in 2027, not an incumbent official. Tone: ${tone.toLowerCase()}, factual and specific.
+You are drafting a prospective county development policy platform for the configured candidate, a candidate seeking election as the configured Kenyan office, not an incumbent official. Tone: ${tone.toLowerCase()}, factual and specific.
 Language: ${language}. Write ONLY the prose for the requested section — no headings, no markdown, no labels, no bullet symbols other than plain lines.
-Describe only MP responsibilities for legislation, representation, oversight and lawful NG-CDF processes and documented Kaiti Constituency needs. Distinguish proposed actions from approved or completed work. Describe the candidate\'s priorities as proposals conditional on election, budgeting, public participation and lawful county approvals. Never write as if the candidate currently controls public budgets, staff, or projects.`;
+Describe responsibilities of the configured office and verified local needs. Identify national, county and legislative roles correctly. Distinguish proposed actions from approved or completed work. Describe the candidate\'s priorities as proposals conditional on election, budgeting, public participation and lawful county approvals. Never write as if the candidate currently controls public budgets, staff, or projects.`;
 
   const issuesLine = priorityIssues ? ` Emphasize these priority issues: ${priorityIssues}.` : "";
 
@@ -282,7 +279,7 @@ Describe only MP responsibilities for legislation, representation, oversight and
   sectionCalls.push(
     generateSection(
       base,
-      `Write the CLOSING PLEDGE (~140 words): a summary of transparent service commitments, public reporting and follow-up across Kaiti's four wards: Ukia, Kee, Kilungu and Ilima.`,
+      `Write the CLOSING PLEDGE (~140 words): a summary of transparent service commitments, public reporting and follow-up across the configured campaign area.`,
       460,
     ).then((text) => ({ heading: "PROPOSED CONSTITUENCY COMMITMENTS", text })),
   );
@@ -306,7 +303,7 @@ Describe only MP responsibilities for legislation, representation, oversight and
   }
 
   const body = sections.map((s) => `## ${s.heading}\n\n${s.text}`).join("\n\n");
-  res.json({ title: `${currentCampaignProfile()?.constituency ?? "Campaign"} Development Priorities Brief`, body, mode: "ai" });
+  res.json({ title: `${currentCampaignProfile()?.constituency ?? "Campaign"} Development Priorities Brief`, body, mode: "ai", evidence: evidenceBundle(currentCampaignProfile() ?? {}, priorityIssues) });
 });
 
 // ---- Saved document library (CRUD) ----
