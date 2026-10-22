@@ -152,6 +152,7 @@ export default function SocialListening() {
 
   return (
     <div className="space-y-4">
+      <p className="rounded border border-border p-3 text-xs text-muted-foreground">Indexed news and public pages only. Automated sentiment labels are not representative public opinion or voting intention. Open original sources to verify claims and publication dates.</p>
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>

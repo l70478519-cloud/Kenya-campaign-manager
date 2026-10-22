@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/records";
 type Bundle = {
@@ -27,6 +28,14 @@ type Bundle = {
   limitations: string[];
 };
 export function KenyaEvidencePanel() {
+  const [review, setReview] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function runReview(task: string) {
+    setBusy(true); setReview("");
+    try { const result = await api<{ text: string; note?: string; mode: string }>("dashboard/evidence-review", { method: "POST", body: JSON.stringify({ task }) }); setReview(`${result.mode}\n${result.note ?? ""}\n\n${result.text}`); }
+    catch { setReview("Evidence review could not be completed. Please retry."); }
+    finally { setBusy(false); }
+  }
   const q = useQuery({
     queryKey: ["kenya-evidence"],
     queryFn: () => api<Bundle>("dashboard/evidence"),
@@ -75,6 +84,15 @@ export function KenyaEvidencePanel() {
                   </a>
                 </div>
               ))}
+            </div>
+            <div className="space-y-3">
+              <h3 className="font-semibold">Public-document review</h3>
+              <p className="text-xs text-muted-foreground">Neutral service-delivery research using the sources above. No voter records are sent.</p>
+              <div className="flex flex-wrap gap-2">
+                {[["analyst", "Evidence analyst"], ["swot", "Evidence SWOT"], ["response", "Factual response draft"]].map(([task, label]) => <button key={task} disabled={busy} onClick={() => void runReview(task)} className="rounded border border-border px-3 py-2 disabled:opacity-50">{label}</button>)}
+              </div>
+              {busy && <p role="status">Reviewing sources…</p>}
+              {review && <p role="status" className="whitespace-pre-wrap rounded border border-border p-3">{review}</p>}
             </div>
             <h3 className="font-semibold">Source catalogue</h3>
             {q.data.sources.map((s) => (

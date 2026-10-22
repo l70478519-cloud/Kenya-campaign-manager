@@ -1,3 +1,5 @@
+import { evidenceProvider, reviewPublicEvidence, REVIEW_TASKS, type ReviewTask } from "../lib/evidence-review";
+import { evidenceContext } from "../lib/kenya-evidence";
 import { evidenceBundle } from "../lib/kenya-evidence";
 import { currentCampaignProfile } from "@workspace/db";
 import { Router } from "express";
@@ -8,6 +10,23 @@ import { DASHBOARD_OVERVIEW_SQL } from "../lib/dashboard-overview-sql";
 
 const router = Router();
 router.get("/evidence", (req, res) => res.json(evidenceBundle(currentCampaignProfile() ?? {}, typeof req.query.q === "string" ? req.query.q.slice(0, 300) : "")));
+
+// Fixed tasks, no uploaded personal records or arbitrary model instructions.
+const reviewLocks = new Set<string>();
+router.post("/evidence-review", async (req, res) => {
+  const task = req.body?.task;
+  if (typeof task !== "string" || !Object.hasOwn(REVIEW_TASKS, task)) return res.status(400).json({ error: "Choose analyst, swot or response." });
+  const scope = currentCampaignProfile() ?? {};
+  const key = JSON.stringify(scope);
+  if (reviewLocks.has(key)) return res.status(429).json({ error: "An evidence review is already running." });
+  reviewLocks.add(key);
+  try {
+    const bundle = evidenceBundle(scope);
+    const fallback = () => ({ mode: "document-evidence-review", provider: "none", task, text: [REVIEW_TASKS[task as ReviewTask], ...bundle.facts.map(f => `[${f.sourceId}] ${f.text} (${f.period}; ${f.county ?? "Kenya"}; ${f.locator})`), "Evidence gaps and verification steps:", ...bundle.limitations, "Check dated original documents before publishing. This is a document digest, not a generated AI analysis."].join("\n\n"), evidence: bundle });
+    const generated = await reviewPublicEvidence(task as ReviewTask, evidenceContext(scope)).catch(err => { req.log.warn({ err }, "Evidence provider unavailable"); return null; });
+    return res.json(generated ? { ...generated, mode: "ai-document-review", task, evidence: bundle, note: "AI draft requires source verification before publication." } : { ...fallback(), note: evidenceProvider().provider === "none" ? "No evidence AI provider configured." : "Provider unavailable or configuration incomplete; document digest returned." });
+  } finally { reviewLocks.delete(key); }
+});
 
 router.get("/overview", async (_req, res) => {
   const result = await db.execute(sql.raw(DASHBOARD_OVERVIEW_SQL));

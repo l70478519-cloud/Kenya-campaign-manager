@@ -1,3 +1,4 @@
+import { publicSourceUrl, PUBLIC_LISTENING_COVERAGE } from "../lib/public-source-quality";
 import { Router } from "express";
 import { z } from "zod/v4";
 import { db, socialMentionsTable, socialSourceHealthTable, narrativeMentionsTable, campaignWards, currentCampaignProfile } from "@workspace/db";
@@ -183,12 +184,13 @@ router.post("/scan", async (req, res) => {
     .filter(({ raw, category }) => isRelevant(raw, category))
     .map(({ raw, category }) => {
       const summary = asStr(raw.summary);
-      if (!summary) return null;
+      const url = publicSourceUrl(raw.url);
+      if (!summary || !url) return null;
       const sentiment = (asStr(raw.sentiment) ?? "neutral").toLowerCase();
       return {
         summary: summary.slice(0, 280),
         source: asStr(raw.source)?.slice(0, 120) ?? null,
-        url: asStr(raw.url)?.slice(0, 600) ?? null,
+        url,
         sentiment: SENTIMENTS.has(sentiment) ? sentiment : "neutral",
         category,
         topic: asStr(raw.topic)?.slice(0, 80) ?? null,
@@ -278,6 +280,8 @@ router.post("/scan", async (req, res) => {
     scanned: deduped.length, inserted: inserted.length, mentions: inserted,
     source: freeMode ? "public news search" : usedFallback.size ? "AI web search with public-news fallback" : "AI web search",
     failedCategories: [...failedCategories],
+    ...PUBLIC_LISTENING_COVERAGE,
+    checkedAt: new Date().toISOString(),
   });
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
@@ -326,6 +330,8 @@ router.get("/search-feed", async (req, res) => {
     return res.status(502).json({ error: "The public search provider could not return results. Please retry later." });
   }
 });
+
+router.get("/coverage", (_req, res) => res.json(PUBLIC_LISTENING_COVERAGE));
 
 router.get("/source-health", async (_req, res) => {
   const rows = await db.select().from(socialSourceHealthTable).orderBy(socialSourceHealthTable.sourceKey);
