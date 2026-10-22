@@ -382,6 +382,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </div>
             )}
           {children}
+          <footer className="mt-10 border-t border-border pt-5 text-center text-xs text-muted-foreground">
+            © {new Date().getFullYear()}. All rights reserved.{" "}
+            <a href="https://github.com/l70478519-cloud/Mwathi" target="_blank" rel="noopener noreferrer" className="underline underline-offset-4 hover:text-foreground">Powered by <strong>1Dev.co</strong></a>
+          </footer>
         </div>
       </main>
     </div>
