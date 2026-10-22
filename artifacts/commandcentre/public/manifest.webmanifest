@@ -1,14 +1,26 @@
 {
-  "name": "Command Centre · Campaign Operations",
+  "name": "Command Centre \u00b7 Campaign Operations",
   "short_name": "Command Centre",
   "description": "Secure campaign operations, intelligence and administration.",
   "start_url": "/command-centre",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#06140e",
-  "theme_color": "#06140e",
+  "background_color": "#101211",
+  "theme_color": "#101211",
   "icons": [
-    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
-  ]
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "id": "/command-centre"
 }

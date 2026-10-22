@@ -85,7 +85,15 @@ if (isProd) {
     app.get("/", (_req, res) => res.sendFile(path.join(websiteDir, "index.html")));
   }
 
-  app.use(express.static(dashboardDir));
+  app.use(express.static(dashboardDir, {
+    setHeaders(res, filePath) {
+      if (/[/\\](sw\.js|precache\.json|manifest\.webmanifest|pwa-install\.js|pwa\.css|offline\.html)$/.test(filePath)) {
+        res.setHeader("Cache-Control", "no-cache");
+      } else if (/[/\\]assets[/\\].+-[\w-]+\.(js|css)$/.test(filePath)) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
+    },
+  }));
   if (process.env.SITE_AT_ROOT === "true") {
     // Website pages and assets (features.html, assets/site.js, …) after the app's own files.
     app.use(express.static(websiteDir, { index: false })); // exact .html names only, so app routes like /features and /election-day still reach the app

@@ -30,6 +30,13 @@ export default defineConfig({
   base: basePath,
   plugins: [
     react(),
+    {
+      name: "public-offline-assets",
+      generateBundle(_options, bundle) {
+        const assets = Object.keys(bundle).filter(name => /^assets\/.*\.(js|css)$/.test(name)).map(name => `/${name}`);
+        this.emitFile({ type: "asset", fileName: "precache.json", source: JSON.stringify(assets) });
+      },
+    },
     tailwindcss(),
     runtimeErrorOverlay(),
     ...(process.env.NODE_ENV !== "production" &&

@@ -1,0 +1,7 @@
+.phone-app-tools { position: fixed; bottom: max(14px, env(safe-area-inset-bottom)); right: max(14px, env(safe-area-inset-right)); z-index: 80; max-width: min(340px, calc(100vw - 28px)); font: 13px/1.5 system-ui, sans-serif; color: #f6f6f6; }
+.phone-app-tools button { background: #006b3f; color: #fff; border: 1px solid #39a874; border-radius: 8px; min-height: 44px; padding: 10px 16px; cursor: pointer; box-shadow: 0 4px 16px #0005; }
+.phone-app-tools button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.phone-app-tools p { background: #171c19; padding: 12px; margin: 8px 0 0; border: 1px solid #65736a; border-radius: 8px; overflow-wrap: anywhere; }
+.phone-app-tools [hidden] { display: none; }
+@media print { .phone-app-tools { display: none; } }
+.wa { bottom: calc(82px + env(safe-area-inset-bottom)); }
