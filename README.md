@@ -39,3 +39,33 @@ PORT=10000 BASE_PATH=/ NODE_ENV=production pnpm run build:production
 ```
 
 The acceptance checks include source-level regression assertions; they do not substitute for live PostgreSQL tenant-isolation and provider tests. The imported code retains internal `kaiti_*` table names for compatibility; these are not a restriction to Kaiti. Operational areas come from each campaign profile.
+
+## Run locally
+
+Needs Node 24, pnpm 11 and PostgreSQL 16. On Windows, use **Git Bash**.
+
+1. Create an empty database, e.g. `CREATE DATABASE campaign_manager;`.
+2. Copy `.env.example` to `.env.local` (git-ignored). Set:
+   - `DATABASE_URL`;
+   - `SESSION_SECRET`;
+   - the `BOOTSTRAP_ADMIN_*` values (password of 16+ characters);
+   - optionally the `PRIMARY_*` campaign values;
+   - for free/offline AI, `MAKUENI_AI_MODE=free`.
+
+   Quote values that contain spaces. Remove `NODE_ENV=production`, because production mode needs HTTPS for sign-in cookies.
+
+   On Git Bash, also add `MSYS2_ENV_CONV_EXCL=BASE_PATH`. Otherwise Git Bash rewrites `BASE_PATH=/` into a Windows path.
+3. Install dependencies and create the schema. Review the SQL that push shows; don't use `push-force` on a database you care about.
+   ```sh
+   set -a; source .env.local; set +a
+   pnpm install
+   pnpm --filter @workspace/db run push
+   for f in lib/db/migrations/2026*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f "$f"; done
+   ```
+   `push` creates the base tables. The migrations add the remaining ones and are safe to re-run. The API completes setup on first start: sessions, roles, the bootstrap admin, the first campaign, and per-campaign row-level security.
+4. Start the API, then the app, in two terminals:
+   ```sh
+   PORT=8080 pnpm --filter @workspace/api-server run dev
+   PORT=5173 BASE_PATH=/ pnpm --filter @workspace/commandcentre run dev
+   ```
+   Open http://localhost:5173/login. The app's dev server forwards `/api` and `/s/` to the API. If the API runs elsewhere, set `API_PROXY_TARGET` (e.g. `API_PROXY_TARGET=http://localhost:8180`).

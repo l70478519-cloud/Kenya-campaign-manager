@@ -1,11 +1,15 @@
 import { publicSourceUrl, PUBLIC_LISTENING_COVERAGE } from "../lib/public-source-quality";
 import { Router } from "express";
 import { z } from "zod/v4";
-import { db, socialMentionsTable, socialSourceHealthTable, narrativeMentionsTable, campaignWards, currentCampaignProfile } from "@workspace/db";
+import { db, socialMentionsTable, socialSourceHealthTable, narrativeMentionsTable, competitorsTable, campaignWards, currentCampaignProfile } from "@workspace/db";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { requireAuth, requirePermission } from "../lib/auth";
 import { searchFreeMakueniWeb, classifySentiment } from "./makueni-free-ai";
+import { searchScope, categoryQueries, categoryPrompt, type CategoryKey, type SearchScope } from "../lib/social-terms";
+import { checkLinks } from "../lib/link-check";
+import { cleanText, cleanSummary, dedupeStories } from "../lib/social-text";
+import { fetchKenyanFeeds, searchYouTube, type SourceHealth, type SourceItem } from "../lib/social-sources";
 
 const router = Router();
 // Social listening is open to every signed-in user (view, search, scan).
@@ -13,54 +17,35 @@ const router = Router();
 router.use(requireAuth);
 
 const SENTIMENTS = new Set(["positive", "negative", "neutral"]);
+const CATEGORY_KEYS: CategoryKey[] = ["candidate", "issues", "opponent", "competitor"];
 
-// Guard the expensive AI/web-search scan: only one runs at a time, with a
-// short cooldown afterwards to prevent accidental or abusive credit burn.
+// Guard the expensive AI/web-search scan per campaign: one scan at a time,
+// with a short cooldown afterwards to prevent accidental or abusive credit
+// burn. Campaigns never block each other.
 const SCAN_COOLDOWN_MS = 15_000;
-let scanInFlight = false;
-let lastScanAt = 0;
+const scanState = new Map<number, { inFlight: boolean; lastAt: number }>();
 
 const mentionsQuerySchema = z.object({
-  category: z.enum(["candidate", "issues", "opponent"]).optional(),
+  category: z.enum(["candidate", "issues", "opponent", "competitor"]).optional(),
   sentiment: z.enum(["positive", "negative", "neutral"]).optional(),
 });
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
-type CategoryKey = "candidate" | "issues" | "opponent";
-
-/** Scan targets for the active campaign (candidate, constituency, county, wards). */
-function campaignTerms() {
+/** Search scope for the active campaign: seat, area, wards (lib/social-terms.ts). */
+function campaignScope(): SearchScope {
   const p = currentCampaignProfile();
-  const candidate = (p?.candidateName ?? (p && !p.isPrimary ? "the candidate" : "the candidate"));
-  const shortName = candidate.replace(/^(hon\.?|dr\.?|mr\.?|mrs\.?|ms\.?|eng\.?|prof\.?)\s+/i, "").trim();
-  const place = p?.constituency ?? "your area";
-  const county = p?.county ?? "";
-  return { candidate, shortName, place, county, wards: campaignWards() };
+  return searchScope({
+    seat: p?.seat ?? null, candidateName: p?.candidateName ?? null,
+    county: p?.county ?? null, constituency: p?.constituency ?? null, wards: campaignWards(),
+  });
 }
 
-function scanCategories() {
-  const t = campaignTerms();
-  return [
-    { key: "candidate" as const, prompt: `public mentions, interviews, official notices, community forums and news about ${t.candidate} (also known as ${t.shortName}) in ${t.place} Constituency, ${t.county} County, Kenya` },
-    { key: "issues" as const, prompt: `publicly reported ${t.place} Constituency ward-level service issues and projects (${t.wards.join(", ")}), including water, roads, health facilities, ECDE and schools, agriculture, markets, bursaries, budgets and development works` },
-    { key: "opponent" as const, prompt: `public ${t.place} Constituency and ${t.county} County news, official notices, public participation, audit and budget documents, project delivery updates and documented service-delivery concerns` },
-  ];
-}
-
-function queriesForCategory(key: CategoryKey): string[] {
-  const t = campaignTerms();
-  if (key === "candidate") {
-    return [`"${t.shortName}" ${t.place}`, `"${t.shortName}" ${t.county}`, `"${t.shortName}"`];
-  }
-  if (key === "issues") {
-    return [
-      `${t.place} Constituency water roads health education agriculture`,
-      `${t.place} ${t.wards.slice(0, 3).join(" OR ")} ward project`,
-      `${t.place} borehole hospital market ECDE bursary`,
-    ];
-  }
-  return [`${t.place} Constituency budget audit project`, `${t.county} County public participation service delivery`];
+/** Opponents the campaign has listed (competitors table, campaign-scoped by row-level security). */
+async function campaignCompetitors(scope: SearchScope): Promise<string[]> {
+  const rows = await db.select({ name: competitorsTable.name }).from(competitorsTable);
+  const own = scope.candidate.toLowerCase();
+  return [...new Set(rows.map(r => r.name.trim()).filter(n => n.length >= 3 && n.toLowerCase() !== own))];
 }
 
 function buildInput(prompt: string): string {
@@ -74,7 +59,7 @@ Return ONLY a JSON array (no prose, no markdown code fences) of up to 3 objects.
 - "topic": a short 2-4 word topic tag
 - "date": the publication date if known (e.g. "2026-05-26"), otherwise an empty string
 
-Prefer items from the last few months. If nothing relevant is found, return [].`;
+Only include items you found through web search, with their real URL. Prefer items from the last few months. If nothing relevant is found, return [].`;
 }
 
 type RawMention = {
@@ -86,6 +71,10 @@ type RawMention = {
   date?: unknown;
 };
 
+/** Where an item came from: "ai" links are supplied by the model and must be checked; "feed" links come from a news feed. */
+type Origin = "ai" | "feed";
+type Collected = { raw: RawMention; category: CategoryKey; origin: Origin };
+
 function asStr(v: unknown): string | null {
   return typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
 }
@@ -93,23 +82,34 @@ function asStr(v: unknown): string | null {
 const escapeRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
- * Keeps results that are actually about this campaign. Names and wards must
- * match as whole words (so "Kee" no longer matches "keep"). County-level items
- * are kept for the issues/opponent categories, where county decisions matter.
+ * Keeps results that are actually about this campaign. Names and places must
+ * match as whole words (so "Kee" doesn't match "keep"). Candidate items must
+ * name the candidate; opponent items must name a listed opponent; issue and
+ * public-record items must name a place in the campaign's area.
  */
-function isRelevant(raw: RawMention, category: CategoryKey): boolean {
-  const t = campaignTerms();
+function isRelevant(raw: RawMention, category: CategoryKey, scope: SearchScope, competitors: string[]): boolean {
   // Only the item's own text counts; the topic label is ours and would match every item.
-  const text = [raw.summary, raw.url].filter((v): v is string => typeof v === "string").join(" ");
-  const terms = [t.place, t.shortName, t.candidate, ...t.wards];
-  if (category !== "candidate") terms.push(t.county);
+  // Normalised so decorative letters ("𝗞𝗮𝗶𝘁𝗶") match plain names ("Kaiti").
+  const text = cleanText([raw.summary, raw.url].filter((v): v is string => typeof v === "string").join(" "));
+  const terms = category === "candidate" ? [scope.shortName, scope.candidate]
+    : category === "competitor" ? competitors
+    : scope.national ? ["Kenya", ...scope.placeTerms] : scope.placeTerms;
   return terms.filter(x => x && x.length >= 3).some(term => new RegExp(`\\b${escapeRe(term)}\\b`, "i").test(text));
 }
 
+function categoryTopic(key: CategoryKey, scope: SearchScope): string {
+  const area = scope.areaName || "Area";
+  if (key === "candidate") return `${scope.shortName} coverage`;
+  if (key === "issues") return `${area} service delivery`;
+  if (key === "competitor") return "Opponent coverage";
+  return `${scope.county || area} accountability`;
+}
+
 /** Free-mode scan of one category via public news search. */
-async function freeCategoryScan(key: CategoryKey): Promise<{ raw: RawMention; category: CategoryKey }[] | null> {
-  const t = campaignTerms();
-  const settled = await Promise.allSettled(queriesForCategory(key).map((q) => searchFreeMakueniWeb(q, { strict: true })));
+async function freeCategoryScan(key: CategoryKey, scope: SearchScope, competitors: string[]): Promise<Collected[] | null> {
+  const queries = categoryQueries(key, scope, competitors);
+  if (!queries.length) return [];
+  const settled = await Promise.allSettled(queries.map((q) => searchFreeMakueniWeb(q, { strict: true })));
   const ok = settled.filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof searchFreeMakueniWeb>>> => r.status === "fulfilled");
   if (!ok.length) return null;
   const seen = new Set<string>();
@@ -118,49 +118,130 @@ async function freeCategoryScan(key: CategoryKey): Promise<{ raw: RawMention; ca
     if (seen.has(k)) return false;
     seen.add(k);
     return true;
-  }).slice(0, 15).map((item) => {
-    const summary = item.title + (item.snippet ? " — " + item.snippet.slice(0, 180) : "");
-    return {
+  }).slice(0, 15).map((item) => ({
+    raw: {
+      summary: cleanSummary(item.title, item.snippet?.slice(0, 220), item.source),
+      source: item.source, url: item.url,
+      sentiment: classifySentiment(`${item.title} ${item.snippet}`),
+      topic: categoryTopic(key, scope),
+      date: item.publishedAt ?? "",
+    },
+    category: key,
+    origin: "feed" as const,
+  }));
+}
+
+const PUBLIC_RECORD_WORDS = /\b(budget|audit|auditor|public participation|county assembly|tender|procurement|controller of budget|bursary allocation)\b/i;
+
+/**
+ * Sorts a feed or video item into a category by what it names: the
+ * candidate, a listed opponent, or a place in the campaign's area. Items that
+ * name none of these are dropped. National campaigns take only candidate and
+ * opponent items from feeds, since every Kenyan story is "in the area".
+ */
+function categorise(item: SourceItem, scope: SearchScope, competitors: string[]): CategoryKey | null {
+  const text = cleanText(`${item.title} ${item.text}`);
+  const names = (list: string[]) => list.filter(n => n && n.length >= 3).some(n => new RegExp(`\\b${escapeRe(n)}\\b`, "i").test(text));
+  if (names([scope.shortName, scope.candidate])) return "candidate";
+  if (names(competitors)) return "competitor";
+  if (scope.national || !names(scope.placeTerms)) return null;
+  return PUBLIC_RECORD_WORDS.test(text) ? "opponent" : "issues";
+}
+
+/** Kenyan news feeds plus, when YOUTUBE_API_KEY is set, YouTube video search. */
+async function collectFeedsAndVideos(scope: SearchScope, competitors: string[]): Promise<{ items: Collected[]; health: SourceHealth[] }> {
+  const feeds = await fetchKenyanFeeds();
+  const health = [...feeds.health];
+  const found: SourceItem[] = [...feeds.items];
+  const apiKey = process.env.YOUTUBE_API_KEY?.trim();
+  if (apiKey) {
+    const queries = [...categoryQueries("candidate", scope).slice(0, 1), ...categoryQueries("competitor", scope, competitors).slice(0, 1)];
+    const videos = await searchYouTube(queries, { apiKey });
+    found.push(...videos.items);
+    health.push(videos.health);
+  }
+  const items: Collected[] = [];
+  for (const item of found) {
+    const category = categorise(item, scope, competitors);
+    if (!category) continue;
+    items.push({
       raw: {
-        summary, source: item.source, url: item.url,
-        sentiment: classifySentiment(`${item.title} ${item.snippet}`),
-        topic: key === "candidate" ? `${t.shortName} coverage` : key === "issues" ? `${t.place} service delivery` : `${t.county} accountability`,
+        summary: cleanSummary(item.title, item.text, item.source),
+        source: item.source, url: item.url,
+        sentiment: classifySentiment(`${item.title} ${item.text}`),
+        topic: categoryTopic(category, scope),
         date: item.publishedAt ?? "",
-      } as RawMention,
-      category: key,
-    };
-  });
+      },
+      category,
+      origin: "feed",
+    });
+  }
+  return { items: items.slice(0, 40), health };
+}
+
+/** Records the outcome of one source for this campaign (row-level security scopes the rows). */
+async function recordSourceHealth(sourceKey: string, values: { sourceType: string; failed: boolean; count: number; error?: string }, now: Date) {
+  const set = {
+    sourceType: values.sourceType,
+    status: values.failed ? "error" : "healthy",
+    lastAttemptAt: now,
+    ...(values.failed ? {} : { lastSuccessAt: now }),
+    lastItemCount: values.count,
+    lastError: values.failed ? (values.error ?? "Public-source scan failed for this category; inspect API logs and source availability.") : null,
+    updatedAt: now,
+  };
+  // Update-then-insert rather than ON CONFLICT, so this works whether or not
+  // database isolation (and its per-campaign unique key) is active.
+  const updated = await db.update(socialSourceHealthTable).set(set)
+    .where(eq(socialSourceHealthTable.sourceKey, sourceKey)).returning({ id: socialSourceHealthTable.id });
+  if (!updated.length) await db.insert(socialSourceHealthTable).values({ sourceKey, ...set });
 }
 
 router.post("/scan", async (req, res) => {
-  if (scanInFlight) {
-    return res.status(429).json({ error: "A scan is already in progress. Please wait." });
+  const campaignKey = req.campaignId ?? 0;
+  const state = scanState.get(campaignKey) ?? { inFlight: false, lastAt: 0 };
+  scanState.set(campaignKey, state);
+  if (state.inFlight) {
+    return res.status(429).json({ error: "A scan is already in progress for this campaign. Please wait." });
   }
-  const sinceLast = Date.now() - lastScanAt;
+  const sinceLast = Date.now() - state.lastAt;
   if (sinceLast < SCAN_COOLDOWN_MS) {
     return res.status(429).json({
       error: `Please wait ${Math.ceil((SCAN_COOLDOWN_MS - sinceLast) / 1000)}s before scanning again.`,
     });
   }
-  scanInFlight = true;
+  state.inFlight = true;
   const failedCategories = new Set<string>();
+  const skippedCategories: string[] = [];
   try {
-  const categories = scanCategories();
+  const scope = campaignScope();
+  const competitors = await campaignCompetitors(scope);
+  const categories = CATEGORY_KEYS.map(key => ({ key, prompt: categoryPrompt(key, scope, competitors) }))
+    .filter(cat => {
+      if (cat.prompt) return true;
+      skippedCategories.push(cat.key); // e.g. no opponents listed yet
+      return false;
+    });
   const freeMode = process.env.MAKUENI_AI_MODE === "free";
   const usedFallback = new Set<string>();
+  // Kenyan news feeds (and YouTube when configured) run alongside the category searches.
+  const extraPromise = collectFeedsAndVideos(scope, competitors).catch((err) => {
+    req.log.error({ err }, "feed and video collection failed");
+    return { items: [] as Collected[], health: [] as SourceHealth[] };
+  });
   const perCategory = await Promise.all(
-    categories.map(async (cat) => {
+    categories.map(async (cat): Promise<Collected[]> => {
       if (!freeMode) {
         try {
           const response = await openai.responses.create({
             model: "gpt-5.1",
             tools: [{ type: "web_search" }],
-            input: buildInput(cat.prompt),
+            input: buildInput(cat.prompt!),
           });
           const text = response.output_text ?? "";
           const match = text.match(/\[[\s\S]*\]/);
           const arr = match ? (JSON.parse(match[0]) as unknown) : [];
-          if (Array.isArray(arr)) return (arr as RawMention[]).map((raw) => ({ raw, category: cat.key }));
+          if (Array.isArray(arr)) return (arr as RawMention[]).map((raw) => ({ raw, category: cat.key, origin: "ai" as const }));
         } catch (err) {
           req.log.warn({ err, category: cat.key }, "AI web search unavailable; using public news search instead");
         }
@@ -168,7 +249,7 @@ router.post("/scan", async (req, res) => {
       }
       // Free mode, or the AI provider failed: public news search still works.
       try {
-        const items = await freeCategoryScan(cat.key);
+        const items = await freeCategoryScan(cat.key, scope, competitors);
         if (items === null) { failedCategories.add(cat.key); return []; }
         return items;
       } catch (err) {
@@ -179,10 +260,10 @@ router.post("/scan", async (req, res) => {
     }),
   );
 
-  const normalized = perCategory
-    .flat()
-    .filter(({ raw, category }) => isRelevant(raw, category))
-    .map(({ raw, category }) => {
+  const extra = await extraPromise;
+  const normalized = [...perCategory.flat(), ...extra.items]
+    .filter(({ raw, category }) => isRelevant(raw, category, scope, competitors))
+    .map(({ raw, category, origin }) => {
       const summary = asStr(raw.summary);
       const url = publicSourceUrl(raw.url);
       if (!summary || !url) return null;
@@ -195,30 +276,39 @@ router.post("/scan", async (req, res) => {
         category,
         topic: asStr(raw.topic)?.slice(0, 80) ?? null,
         publishedAt: asStr(raw.date)?.slice(0, 40) ?? null,
+        origin,
       };
     })
     .filter((m): m is NonNullable<typeof m> => m !== null);
 
-  // Dedupe within this batch (by url, else summary).
-  const seen = new Set<string>();
-  const deduped = normalized.filter((m) => {
-    const key = (m.url ?? m.summary).toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  // One copy of each story across all sources (same link, or the same headline
+  // from different outlets or aggregators), then skip stories already stored.
+  const headline = (summary: string) => summary.split(" — ")[0];
+  const deduped = dedupeStories(normalized.map((m) => ({ ...m, title: headline(m.summary) })));
+  const recent = await db
+    .select({ url: socialMentionsTable.url, summary: socialMentionsTable.summary })
+    .from(socialMentionsTable)
+    .orderBy(desc(socialMentionsTable.scannedAt))
+    .limit(500);
+  const known = recent.filter((r): r is { url: string; summary: string } => !!r.url).map((r) => ({ url: r.url, title: headline(r.summary) }));
+  const fresh = dedupeStories(deduped, known).map(({ title: _title, ...m }) => m);
 
-  // Dedupe against already-stored mentions by url.
-  const urls = deduped.map((m) => m.url).filter((u): u is string => !!u);
-  let existingUrls = new Set<string>();
-  if (urls.length > 0) {
-    const rows = await db
-      .select({ url: socialMentionsTable.url })
-      .from(socialMentionsTable)
-      .where(inArray(socialMentionsTable.url, urls));
-    existingUrls = new Set(rows.map((r) => r.url).filter((u): u is string => !!u));
+  // Links supplied by the AI must open; dead or unsafe links are dropped.
+  const checkedAt = new Date();
+  const checks = await checkLinks(fresh.filter(m => m.origin === "ai").map(m => m.url));
+  const linkSummary = { verified: 0, unconfirmed: 0, dropped: 0, fromFeed: 0 };
+  const toInsert: (typeof socialMentionsTable.$inferInsert)[] = [];
+  for (const { origin, ...m } of fresh) {
+    if (origin === "feed") {
+      linkSummary.fromFeed++;
+      toInsert.push({ ...m, linkStatus: "feed", linkCheckedAt: null });
+      continue;
+    }
+    const check = checks.get(m.url);
+    if (!check || check.status === "broken") { linkSummary.dropped++; continue; }
+    linkSummary[check.status]++;
+    toInsert.push({ ...m, linkStatus: check.status, linkCheckedAt: checkedAt });
   }
-  const toInsert = deduped.filter((m) => !(m.url && existingUrls.has(m.url)));
 
   let inserted: (typeof socialMentionsTable.$inferSelect)[] = [];
   if (toInsert.length > 0) {
@@ -249,37 +339,27 @@ router.post("/scan", async (req, res) => {
   }
 
   const now = new Date();
-  await Promise.all(categories.map(async (cat) => {
-    const failed = failedCategories.has(cat.key);
-    const count = deduped.filter((mention) => mention.category === cat.key).length;
-    await db.insert(socialSourceHealthTable).values({
-      sourceKey: cat.key,
-      sourceType: freeMode || usedFallback.has(cat.key) ? "google_news_rss" : "openai_web_search",
-      status: failed ? "error" : "healthy",
-      lastAttemptAt: now,
-      lastSuccessAt: failed ? undefined : now,
-      lastItemCount: count,
-      lastError: failed ? "Public-source scan failed for this category; inspect API logs and source availability." : null,
-      updatedAt: now,
-    }).onConflictDoUpdate({
-      target: socialSourceHealthTable.sourceKey,
-      set: {
-        sourceType: freeMode || usedFallback.has(cat.key) ? "google_news_rss" : "openai_web_search",
-        status: failed ? "error" : "healthy",
-        lastAttemptAt: now,
-        ...(failed ? {} : { lastSuccessAt: now }),
-        lastItemCount: count,
-        lastError: failed ? "Public-source scan failed for this category; inspect API logs and source availability." : null,
-        updatedAt: now,
-      },
-    });
-  }));
+  await Promise.all(categories.map((cat) => recordSourceHealth(cat.key, {
+    sourceType: freeMode || usedFallback.has(cat.key) ? "google_news_rss" : "openai_web_search",
+    failed: failedCategories.has(cat.key),
+    count: deduped.filter((mention) => mention.category === cat.key).length,
+  }, now)));
+  await Promise.all(extra.health.map((h) => recordSourceHealth(h.key, {
+    sourceType: h.key === "youtube" ? "youtube_api" : "rss",
+    failed: !h.ok,
+    count: h.items,
+    error: h.error,
+  }, now)));
 
-  req.log.info({ scanned: deduped.length, inserted: inserted.length }, "social scan complete");
+  req.log.info({ scanned: deduped.length, inserted: inserted.length, links: linkSummary }, "social scan complete");
   return res.json({
     scanned: deduped.length, inserted: inserted.length, mentions: inserted,
     source: freeMode ? "public news search" : usedFallback.size ? "AI web search with public-news fallback" : "AI web search",
     failedCategories: [...failedCategories],
+    skippedCategories,
+    links: linkSummary,
+    sources: extra.health.map(({ key, label, ok, items }) => ({ key, label, ok, items })),
+    area: scope.areaLabel || null,
     ...PUBLIC_LISTENING_COVERAGE,
     checkedAt: new Date().toISOString(),
   });
@@ -291,8 +371,8 @@ router.post("/scan", async (req, res) => {
       code: "SOCIAL_SCAN_PROCESSING_FAILED",
     });
   } finally {
-    scanInFlight = false;
-    lastScanAt = Date.now();
+    state.inFlight = false;
+    state.lastAt = Date.now();
   }
 });
 

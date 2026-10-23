@@ -18,6 +18,10 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+// Local dev: forward API calls to the Express server. In production the API
+// serves the built app from the same origin, so this is unused there.
+const apiProxyTarget = process.env.API_PROXY_TARGET ?? "http://localhost:8080";
+
 const basePath = process.env.BASE_PATH;
 
 if (!basePath) {
@@ -65,6 +69,11 @@ export default defineConfig({
     allowedHosts: true,
     fs: {
       strict: true,
+    },
+    proxy: {
+      "/api": apiProxyTarget,
+      // Regex key: a plain "/s" prefix would also capture "/src/..." modules.
+      "^/s/": apiProxyTarget,
     },
   },
   preview: {
