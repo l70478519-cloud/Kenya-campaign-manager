@@ -307,7 +307,7 @@ export default function Admin() {
                       <CheckCircle className="w-4 h-4 text-green-400" />
                       <span className="font-mono text-[10px] text-green-400">USER CREATED — {inviteResult.user?.name?.toUpperCase()} · {inviteResult.user?.role?.toUpperCase()}</span>
                     </div>
-                    <p className="font-mono text-[9px] text-muted-foreground mb-2 flex items-center gap-1"><AlertTriangle className="w-2.5 h-2.5 text-yellow-400" /> The password is shown ONCE and cannot be retrieved later. Copy and share it securely.</p>
+                    <p className="font-mono text-[9px] text-muted-foreground mb-2 flex items-center gap-1"><AlertTriangle className="w-2.5 h-2.5 text-yellow-400" /> The password is shown ONCE and cannot be retrieved later. Copy and share it securely. It is temporary: the user chooses their own at first sign-in.</p>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="bg-secondary border border-border px-3 py-2">
                         <p className="font-mono text-[9px] text-muted-foreground mb-1">USERNAME</p>
@@ -384,7 +384,7 @@ export default function Admin() {
           {resetCreds && (
             <div className="bg-green-500/10 border border-green-500/30 px-4 py-3 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="font-mono text-[10px] text-green-400 flex items-center gap-2"><Key className="w-3 h-3" /> NEW PASSWORD FOR {resetCreds.username?.toUpperCase() ?? "USER"}</span>
+                <span className="font-mono text-[10px] text-green-400 flex items-center gap-2"><Key className="w-3 h-3" /> TEMPORARY PASSWORD FOR {resetCreds.username?.toUpperCase() ?? "USER"}</span>
                 <button onClick={() => setResetCreds(null)} className="text-muted-foreground hover:text-foreground"><X className="w-3 h-3" /></button>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -393,11 +393,11 @@ export default function Admin() {
                   <div className="flex items-center justify-between gap-2"><span className="font-mono text-sm truncate">{resetCreds.username}</span><CopyButton text={resetCreds.username ?? ""} /></div>
                 </div>
                 <div className="bg-secondary border border-primary/40 px-3 py-2">
-                  <p className="font-mono text-[9px] text-muted-foreground mb-1">NEW PASSWORD</p>
+                  <p className="font-mono text-[9px] text-muted-foreground mb-1">TEMPORARY PASSWORD</p>
                   <div className="flex items-center justify-between gap-2"><span className="font-mono text-sm text-primary truncate">{resetCreds.password}</span><CopyButton text={resetCreds.password ?? ""} /></div>
                 </div>
               </div>
-              <p className="font-mono text-[9px] text-muted-foreground flex items-center gap-1"><Info className="w-2.5 h-2.5" /> Shown once. Share securely with the user.</p>
+              <p className="font-mono text-[9px] text-muted-foreground flex items-center gap-1"><Info className="w-2.5 h-2.5" /> Shown once. Share securely with the user; they choose their own password at next sign-in.</p>
             </div>
           )}
 

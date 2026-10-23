@@ -40,6 +40,7 @@ import CommandCentre from "@/pages/command-centre";
 import SystemHealth from "@/pages/system-health";
 import FeatureCatalogue from "@/pages/feature-catalogue";
 import Security from "@/pages/security";
+import { ChangePasswordForm } from "@/components/account-settings";
 import TenancyAdmin from "@/pages/tenancy-admin";
 import { useTenancy, LEGACY_HREFS, legacyHidden } from "@/lib/tenancy";
 import { applyCampaignGeography } from "@/lib/wards";
@@ -89,7 +90,7 @@ function Guarded({ module, component: Component }: { module: string; component: 
 }
 
 function ProtectedRoutes() {
-  const { user, loading, mfaEnrollmentRequired, logout } = useAuth();
+  const { user, loading, mfaEnrollmentRequired, passwordChangeRequired, logout } = useAuth();
   const [, setLocation] = useLocation();
   const tenancy = useTenancy();
 
@@ -99,6 +100,23 @@ function ProtectedRoutes() {
 
   if (loading) return <FullscreenLoader />;
   if (!user) return null;
+
+  // A temporary password (first sign-in with the root email, or one issued by
+  // an administrator) must be replaced before anything else.
+  if (passwordChangeRequired) {
+    return (
+      <div className="min-h-screen bg-background text-foreground p-4 sm:p-8 flex flex-col items-center">
+        <section className="w-full max-w-md kaiti-glass rounded-2xl p-5 space-y-4">
+          <header className="space-y-1">
+            <h1 className="text-xl font-bold">Set your own password</h1>
+            <p className="text-sm text-muted-foreground">You signed in with a temporary password. Choose a new one that only you know. You can change your sign-in email later under Account security.</p>
+          </header>
+          <ChangePasswordForm forced />
+        </section>
+        <button type="button" onClick={() => void logout().then(() => setLocation("/login"))} className="mt-6 text-xs text-muted-foreground underline">Sign out</button>
+      </div>
+    );
+  }
 
   // Roles that require 2FA see only the enrolment page until it's set up.
   if (mfaEnrollmentRequired) {

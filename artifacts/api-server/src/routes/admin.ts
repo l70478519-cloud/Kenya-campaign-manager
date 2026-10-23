@@ -88,6 +88,8 @@ router.post("/users", requirePermission("admin", "write"), async (req, res) => {
   const [user] = await db.insert(adminUsersTable).values({
     name, email, username, passwordHash, phone, notes, role,
     status: "active", invitedBy: actor(req).email,
+    // Generated password: the user must choose their own at first sign-in.
+    mustChangePassword: true,
   }).returning();
 
   await logAudit(actor(req).email, actor(req).name, `Created user: ${email} (${role})`, "admin", `Username: ${username}`, "info");
@@ -102,7 +104,7 @@ router.post("/users/:id/reset-password", requirePermission("admin", "write"), as
   const password = generatePassword();
   const passwordHash = await hashPassword(password);
   const [user] = await db.update(adminUsersTable)
-    .set({ passwordHash, updatedAt: new Date() })
+    .set({ passwordHash, mustChangePassword: true, updatedAt: new Date() })
     .where(eq(adminUsersTable.id, targetId))
     .returning();
   if (!user) { res.status(404).json({ error: "Not found" }); return; }

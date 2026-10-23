@@ -16,6 +16,7 @@ let seeded = false;
 export async function ensureAuthColumns(): Promise<void> {
   await db.execute(sql`ALTER TABLE "admin_users" ADD COLUMN IF NOT EXISTS "username" text`);
   await db.execute(sql`ALTER TABLE "admin_users" ADD COLUMN IF NOT EXISTS "password_hash" text`);
+  await db.execute(sql`ALTER TABLE "admin_users" ADD COLUMN IF NOT EXISTS "must_change_password" boolean NOT NULL DEFAULT false`);
   await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "admin_users_username_unique" ON "admin_users" ("username")`);
 }
 
@@ -334,6 +335,8 @@ export async function ensureBootstrapAdmin(): Promise<void> {
       status: "active",
       invitedBy: "system",
       notes: "Bootstrap super administrator",
+      // The root email's setup password is temporary: the client chooses their own at first sign-in.
+      mustChangePassword: true,
     }).onConflictDoNothing();
     return;
   }
@@ -343,6 +346,7 @@ export async function ensureBootstrapAdmin(): Promise<void> {
     await db.update(adminUsersTable).set({
       username: existing.username ?? BOOTSTRAP_USERNAME,
       passwordHash: existing.passwordHash ?? passwordHash,
+      ...(existing.passwordHash ? {} : { mustChangePassword: true }),
       role: "super-admin",
       status: "active",
       updatedAt: new Date(),

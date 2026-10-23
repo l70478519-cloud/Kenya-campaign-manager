@@ -130,13 +130,19 @@ export async function accessControl(req: Request, res: Response, rawNext: NextFu
     }
     req.currentUser = user;
 
+    // A temporary password must be replaced before anything else (first sign-in with the root email,
+    // or a password issued by an administrator).
+    if (req.session.passwordChangeRequired && !path.startsWith("/auth/")) {
+      res.status(403).json({ error: "Choose your own password to continue.", passwordChangeRequired: true });
+      return;
+    }
     // Roles that require 2FA can do nothing but enrol until they have it.
     if (req.session.mfaEnrollRequired && !path.startsWith("/auth/")) {
       res.status(403).json({ error: "Set up two-factor sign-in to continue.", mfaEnrollmentRequired: true });
       return;
     }
-    // Any signed-in user may manage their own 2FA.
-    if (path.startsWith("/auth/mfa/")) { next(); return; }
+    // Any signed-in user may manage their own 2FA, password and sign-in email.
+    if (path.startsWith("/auth/mfa/") || path.startsWith("/auth/account/")) { next(); return; }
 
     const campaignId = await resolveCampaign(req);
     if (campaignId === null && !isEmergencySession(req)) {

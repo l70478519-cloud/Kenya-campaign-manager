@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import {
   findByIdentifier,
   verifyPassword,
+  hashPassword,
   getSessionUser,
   permissionsForRole,
   sanitizeUser,
@@ -14,6 +15,7 @@ import {
   isEmergencySession,
 } from "../lib/auth";
 import { ensureSeeded } from "../lib/seed";
+import { newPasswordProblem } from "../lib/password-policy";
 import { db as rawDb } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import {
@@ -138,18 +140,22 @@ router.post("/login", async (req, res) => {
     req.session.userId = user.id;
     req.session.emergencyAuth = false;
     req.session.mfaEnrollRequired = roleRequiresMfa(user.role);
+    req.session.passwordChangeRequired = user.mustChangePassword === true;
 
     await db
       .update(adminUsersTable)
       .set({ lastLoginAt: new Date() })
       .where(eq(adminUsersTable.id, user.id));
 
-    await audit(user.email, user.name, req.session.mfaEnrollRequired ? "Signed in (2FA enrolment required)" : "Signed in");
+    await audit(user.email, user.name,
+      req.session.passwordChangeRequired ? "Signed in (temporary password; must choose a new one)"
+        : req.session.mfaEnrollRequired ? "Signed in (2FA enrolment required)" : "Signed in");
 
     res.json({
       user: sanitizeUser(user),
       permissions: await permissionsForRole(user.role),
       mfaEnrollmentRequired: req.session.mfaEnrollRequired === true,
+      passwordChangeRequired: req.session.passwordChangeRequired === true,
     });
   } catch (error) {
     console.error("Normal database login failed:", error);
@@ -187,11 +193,14 @@ router.get("/me", async (req, res) => {
   const mfa = await getMfa(user.id).catch(() => null);
   // Refresh policy after configuration changes, including existing sessions.
   req.session.mfaEnrollRequired = roleRequiresMfa(user.role) && mfa?.enabled !== true;
+  // Refresh from the database so an administrator's password reset applies to open sessions too.
+  req.session.passwordChangeRequired = user.mustChangePassword === true;
   res.json({
     user: sanitizeUser(user),
     permissions: await permissionsForRole(user.role),
     mfaEnabled: mfa?.enabled === true,
     mfaEnrollmentRequired: req.session.mfaEnrollRequired === true && mfa?.enabled !== true,
+    passwordChangeRequired: req.session.passwordChangeRequired === true,
   });
 });
 
@@ -222,9 +231,10 @@ router.post("/mfa/verify", async (req, res) => {
   await regenerate(req);
   req.session.userId = user.id;
   req.session.emergencyAuth = false;
+  req.session.passwordChangeRequired = user.mustChangePassword === true;
   await db.update(adminUsersTable).set({ lastLoginAt: new Date() }).where(eq(adminUsersTable.id, user.id));
   await audit(user.email, user.name, result === "recovery" ? "Signed in with a recovery code" : "Signed in (2FA)", result === "recovery" ? "warning" : "info");
-  res.json({ user: sanitizeUser(user), permissions: await permissionsForRole(user.role), usedRecoveryCode: result === "recovery" });
+  res.json({ user: sanitizeUser(user), permissions: await permissionsForRole(user.role), usedRecoveryCode: result === "recovery", passwordChangeRequired: req.session.passwordChangeRequired === true });
 });
 
 // ── Enrolment (signed-in user) ───────────────────────────────────────────────
@@ -277,6 +287,56 @@ router.post("/mfa/disable", async (req, res) => {
   await rawDb.execute(sql`DELETE FROM public.kaiti_user_mfa WHERE user_id=${user.id}`);
   await audit(user.email, user.name, "Turned off two-factor sign-in", "warning");
   res.json({ enabled: false });
+});
+
+// ── Own account: password and sign-in email ──────────────────────────────────
+// Clients start with the root email and a temporary password; they choose
+// their own password at first sign-in and can change either later.
+
+router.post("/account/password", async (req, res) => {
+  const user = await getSessionUser(req);
+  if (!user) { res.status(401).json({ error: "Not authenticated" }); return; }
+  if (isEmergencySession(req) || !user.passwordHash) { res.status(400).json({ error: "This account's password can't be changed here." }); return; }
+  const body = z.object({ currentPassword: z.string().min(1, "Enter your current password."), newPassword: z.string().min(1, "Enter a new password.").max(1000) }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.issues[0]?.message ?? "Check the passwords" }); return; }
+  if (tooManyAttempts(`account:${user.id}`, 10, 15 * 60_000)) { res.status(429).json({ error: "Too many attempts. Wait 15 minutes and try again." }); return; }
+  const { currentPassword, newPassword } = body.data;
+  if (!(await verifyPassword(currentPassword, user.passwordHash))) {
+    await audit(user.email, user.name, "Failed password change (wrong current password)", "warning");
+    res.status(401).json({ error: "Your current password is incorrect." }); return;
+  }
+  const problem = newPasswordProblem(newPassword, currentPassword, [user.email, user.username]);
+  if (problem) { res.status(400).json({ error: problem }); return; }
+  clearAttempts(`account:${user.id}`);
+  await db.update(adminUsersTable).set({ passwordHash: await hashPassword(newPassword), mustChangePassword: false, updatedAt: new Date() }).where(eq(adminUsersTable.id, user.id));
+  // Sign out this account's other sessions; the current one stays signed in.
+  try {
+    await rawDb.execute(sql`DELETE FROM user_sessions WHERE sess->>'userId' = ${String(user.id)} AND sid <> ${req.sessionID}`);
+  } catch { /* best effort */ }
+  req.session.passwordChangeRequired = false;
+  await audit(user.email, user.name, "Changed own password");
+  res.json({ ok: true });
+});
+
+router.post("/account/email", async (req, res) => {
+  const user = await getSessionUser(req);
+  if (!user) { res.status(401).json({ error: "Not authenticated" }); return; }
+  if (isEmergencySession(req) || !user.passwordHash) { res.status(400).json({ error: "This account's email can't be changed here." }); return; }
+  const body = z.object({ currentPassword: z.string().min(1, "Enter your current password."), newEmail: z.string().trim().toLowerCase().email("Enter a valid email address.").max(254) }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.issues[0]?.message ?? "Check the email address" }); return; }
+  if (tooManyAttempts(`account:${user.id}`, 10, 15 * 60_000)) { res.status(429).json({ error: "Too many attempts. Wait 15 minutes and try again." }); return; }
+  const { currentPassword, newEmail } = body.data;
+  if (!(await verifyPassword(currentPassword, user.passwordHash))) {
+    await audit(user.email, user.name, "Failed email change (wrong current password)", "warning");
+    res.status(401).json({ error: "Your current password is incorrect." }); return;
+  }
+  if (newEmail === user.email.toLowerCase()) { res.status(400).json({ error: "That's already your sign-in email." }); return; }
+  const [taken] = await db.select({ id: adminUsersTable.id }).from(adminUsersTable).where(sql`lower(${adminUsersTable.email}) = ${newEmail}`).limit(1);
+  if (taken) { res.status(409).json({ error: "Another account already uses that email." }); return; }
+  clearAttempts(`account:${user.id}`);
+  const [updated] = await db.update(adminUsersTable).set({ email: newEmail, updatedAt: new Date() }).where(eq(adminUsersTable.id, user.id)).returning();
+  await audit(newEmail, user.name, `Changed sign-in email from ${user.email} to ${newEmail}`);
+  res.json({ user: sanitizeUser(updated) });
 });
 
 router.post("/logout", (req, res) => {
