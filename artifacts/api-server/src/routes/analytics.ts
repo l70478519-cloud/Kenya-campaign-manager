@@ -246,9 +246,10 @@ router.get("/kols", async (_req, res) => {
     total: sql<number>`count(*)`,
     totalFollowers: sql<number>`sum(${kolTable.followerCount})`,
     avgInfluence: sql<number>`avg(${kolTable.influenceScore})`,
-    aligned: sql<number>`sum(case when ${kolTable.alignment} = 'aligned' then 1 else 0 end)`,
+    // Stances are saved as supporter / neutral / opponent (routes/kol.ts).
+    aligned: sql<number>`sum(case when ${kolTable.alignment} = 'supporter' then 1 else 0 end)`,
     neutral: sql<number>`sum(case when ${kolTable.alignment} = 'neutral' then 1 else 0 end)`,
-    opposed: sql<number>`sum(case when ${kolTable.alignment} = 'opposed' then 1 else 0 end)`,
+    opposed: sql<number>`sum(case when ${kolTable.alignment} = 'opponent' then 1 else 0 end)`,
   }).from(kolTable);
 
   const byTier = await db.select({
@@ -304,7 +305,7 @@ router.get("/insights", async (_req, res) => {
   const [msgs] = await db.select({ total: sql<number>`count(*)`, recipients: sql<number>`sum(${messageCampaignsTable.recipientCount})`, delivered: sql<number>`sum(${messageCampaignsTable.deliveredCount})` }).from(messageCampaignsTable);
   const [polls] = await db.select({ total: sql<number>`count(*)`, votes: sql<number>`sum(${opinionPollsTable.totalVotes})` }).from(opinionPollsTable);
   const [issues] = await db.select({ total: sql<number>`count(*)`, open: sql<number>`sum(case when ${topicalIssuesTable.status} = 'open' then 1 else 0 end)` }).from(topicalIssuesTable);
-  const [kols] = await db.select({ total: sql<number>`count(*)`, followers: sql<number>`sum(${kolTable.followerCount})`, aligned: sql<number>`sum(case when ${kolTable.alignment} = 'aligned' then 1 else 0 end)` }).from(kolTable);
+  const [kols] = await db.select({ total: sql<number>`count(*)`, followers: sql<number>`sum(${kolTable.followerCount})`, aligned: sql<number>`sum(case when ${kolTable.alignment} = 'supporter' then 1 else 0 end)` }).from(kolTable);
   const [finance] = await db.select({ total: sql<number>`sum(${donationsTable.amount})`, count: sql<number>`count(*)` }).from(donationsTable);
   const [records] = await db.select({ total: sql<number>`count(*)`, passed: sql<number>`sum(case when ${legislativeRecordsTable.status} = 'passed' then 1 else 0 end)` }).from(legislativeRecordsTable);
   const [achievements] = await db.select({ total: sql<number>`count(*)`, completed: sql<number>`sum(case when ${achievementsTable.status} = 'completed' then 1 else 0 end)` }).from(achievementsTable);

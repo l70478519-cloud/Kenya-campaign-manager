@@ -10,6 +10,7 @@ import { searchScope, categoryQueries, categoryPrompt, type CategoryKey, type Se
 import { checkLinks } from "../lib/link-check";
 import { cleanText, cleanSummary, dedupeStories } from "../lib/social-text";
 import { fetchKenyanFeeds, searchYouTube, type SourceHealth, type SourceItem } from "../lib/social-sources";
+import { linkMentionsToKols } from "../lib/kol-service";
 import { classifyByRules, needsReview, classificationPrompt, parseAiClassifications, detectLanguage, COUNTED_MENTIONS_SQL, type Classification } from "../lib/social-classify";
 
 const router = Router();
@@ -389,6 +390,14 @@ router.post("/scan", async (req, res) => {
     }
   }
 
+  // Link new mentions to the campaign's KOLs (by handle or full name).
+  let kolLinks = 0;
+  try {
+    kolLinks = await linkMentionsToKols(inserted.map(m => ({ id: m.id, summary: m.summary, source: m.source })));
+  } catch (err) {
+    req.log.warn({ err }, "Mentions saved; KOL linking will catch up on the next scan");
+  }
+
   // Catch up older mentions saved before classification existed (a few per scan).
   let backfilled = 0;
   try {
@@ -431,6 +440,7 @@ router.post("/scan", async (req, res) => {
       classifiedBy: freeMode ? "rules" : labels.some(l => l.classifiedBy === "ai") ? "ai" : "rules",
       olderMentionsClassified: backfilled,
     },
+    kolLinks,
     area: scope.areaLabel || null,
     ...PUBLIC_LISTENING_COVERAGE,
     checkedAt: new Date().toISOString(),
