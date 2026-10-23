@@ -21,8 +21,11 @@ multi-campaign organisations, two-factor sign-in, audit and data-rights tools.
 See `DEPLOY_RENDER.md`. Every campaign starts by choosing its seat and area; the platform
 loads the right wards and every module uses them.
 
-Electoral boundaries: open compilation of IEBC 2022 boundaries (MIT), corrected against
-official records. Confirm against the current IEBC gazette for legal filings.
+Electoral boundaries: open compilation of IEBC 2022 boundaries (MIT), cross-checked ward-for-ward
+against the IEBC polling-station register, with 24,593 polling centres built in. Each aspirant sees only
+their own area; set `DEMO_ASPIRANTS_PASSWORD` for three demo sign-ins (MCA, MP, Governor). The AI assistant
+also draws on Kenya Vision 2030 and MTP IV (BETA). See `docs/geography-polling-centres.md`.
+Confirm against the current IEBC gazette for legal filings.
 
 ## Combined repository layout
 

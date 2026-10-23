@@ -5,6 +5,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { hashPassword } from "./auth";
 import { TENANCY_MFA_SQL } from "./tenancy-sql";
 import { KOL_MIGRATION_SQL } from "./kol-sql";
+import { ensureDemoAspirants } from "./demo-aspirants";
 
 let seeded = false;
 
@@ -468,5 +469,6 @@ async function ensureSeededAsOwner(): Promise<void> {
   await seedDefaultConfig();
   await ensureBootstrapAdmin();
   await ensureTenantIsolation();
+  await ensureDemoAspirants();
   seeded = true;
 }

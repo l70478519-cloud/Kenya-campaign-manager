@@ -83,6 +83,7 @@ const MODULE_BY_PREFIX: Array<[string, string]> = [
   ["/command-centre", "dashboard"],
   ["/system", "admin"],
   ["/tenancy", "admin"],
+  ["/geography", "dashboard"],
   ["/analysis", "intelligence"],
 ];
 
@@ -170,7 +171,10 @@ export async function accessControl(req: Request, res: Response, rawNext: NextFu
     // Deleting saved mentions falls through to the normal Intelligence check.
     if ((path === "/social" || path.startsWith("/social/")) && method !== "DELETE") { next(); return; }
 
-    const needed: PermLevel = READ_METHODS.has(method) ? "read" : "write";
+    // Asking the assistant changes no data, so read access is enough (read-only
+    // roles such as "candidate" can use it). Other /ai routes save documents.
+    const readOnlyPost = method === "POST" && path === "/ai/assist";
+    const needed: PermLevel = READ_METHODS.has(method) || readOnlyPost ? "read" : "write";
     const mod = moduleFor(path);
 
     if (!mod) {

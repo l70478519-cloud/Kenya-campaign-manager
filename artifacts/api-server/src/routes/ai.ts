@@ -111,7 +111,7 @@ const QUICK_PROMPTS: Record<string, string[]> = {
   fundraising: ["Review transaction reconciliation status", "Summarize verified county activity expenses", "List missing payment configuration details"],
   "election-day": ["Check local polling-station data completeness", "Summarize station reporting status", "List records awaiting verification"],
   swot: ["Review service delivery risks and evidence gaps", "Identify operational strengths and constraints", "Suggest data-quality improvements"],
-  credentials: ["Find the official the selected campaign area development plan", "Summarize a sourced county budget item", "List documents needed to verify a project"],
+  credentials: ["How does our agenda align with Vision 2030 and MTP IV (BETA)?", "Find the official the selected campaign area development plan", "Summarize a sourced county budget item", "List documents needed to verify a project"],
   analytics: ["Compare service metrics by ward", "Explain missing or outdated data", "Create a source-backed county indicator summary"],
   admin: ["Review role permissions", "Check audit-log completeness", "Review workspace data-isolation controls"],
   "voters-db": ["Check voter records with invalid wards", "Summarize registry provenance", "Identify duplicate records for review"],
@@ -369,7 +369,7 @@ router.post("/assist", async (req, res) => {
       messages: [
         {
           role: "system",
-          content: `${CAMPAIGN_CONTEXT}${strategyStr}\n\nREVIEWED KENYA EVIDENCE (use each stated period):\n${currentCidpContext}\n\nHISTORICAL SOURCE — CIDP 2013-2017:\n${historicalCidpContext}\n\nThis source is historical. Never treat its baselines or planned projects as current statistics or current project status. Use it for historical context and compare against current dated evidence.\n\nMODULE: ${module.toUpperCase()}\nROLE: ${moduleCtx}${contextStr}`,
+          content: `${CAMPAIGN_CONTEXT}${strategyStr}\n\nKENYA EVIDENCE (reviewed facts first, then the labelled national development framework; use each stated period and label):\n${currentCidpContext}\n\nHISTORICAL SOURCE — CIDP 2013-2017:\n${historicalCidpContext}\n\nThis source is historical. Never treat its baselines or planned projects as current statistics or current project status. Use it for historical context and compare against current dated evidence.\n\nMODULE: ${module.toUpperCase()}\nROLE: ${moduleCtx}${contextStr}`,
         },
         { role: "user", content: message },
       ],

@@ -173,7 +173,7 @@ export const KENYA_SOURCES: EvidenceSource[] = [
     period: "Changing community index",
     kind: "discovery",
     status: "discovery-only",
-    note: "Discovery aid only. Electoral boundaries require an IEBC source and version; no repository data imported automatically.",
+    note: "Discovery aid only. The one repository dataset used, polling-centre names from the IEBC register compiled at github.com/stevehoober254/kenya-county-data (MIT), is pinned to a commit and checksum (see kenya-polling-centres.ts). Its centre names are not IEBC codes or voter counts.",
   },
 ];
 export const KENYA_FACTS: EvidenceFact[] = [
@@ -415,6 +415,11 @@ export function evidenceBundle(scope: KenyaScope, query = "") {
     mode: "reviewed-source-summaries",
     sources,
     facts,
+    nationalFramework: {
+      note: "Orientation summaries of Kenya Vision 2030, MTP IV (2023-2027) and county-planning law; not page-reviewed. Verify in the official documents.",
+      items: selectFramework(query).map((i) => ({ ...i, sourceDetail: NATIONAL_FRAMEWORK_SOURCES[i.source] })),
+      countyPlan: countyPlanStatus(county),
+    },
     limitations: [
       "Review date is not a fresh measurement or a live crawl.",
       "Only national sources and reviewed sources for the configured county are selected. County figures are not ward figures.",
@@ -433,6 +438,77 @@ export function evidenceBundle(scope: KenyaScope, query = "") {
     ],
   };
 }
+/**
+ * National development framework: Kenya Vision 2030 and its Medium Term Plans,
+ * and the legal link to county plans (CIDPs).
+ *
+ * These are orientation summaries of long-standing, widely published
+ * structure (aims, pillars, plan periods, BETA pillars). They were compiled
+ * without page-by-page review because the official sites could not be reached
+ * when this was written, so they are kept apart from KENYA_FACTS and always
+ * labelled "verify in the official document". They contain no progress figures
+ * and no project status. Add page-reviewed facts to KENYA_FACTS instead.
+ */
+export type FrameworkItem = { id: string; source: "vision2030" | "mtp4" | "county-planning-law"; text: string; topics: string[]; core?: boolean };
+export const NATIONAL_FRAMEWORK_SOURCES = {
+  vision2030: { title: "Kenya Vision 2030", publisher: "Government of Kenya (Vision 2030 Delivery Secretariat)", url: "https://vision2030.go.ke/", period: "2008-2030 long-term blueprint" },
+  mtp4: { title: "Fourth Medium Term Plan 2023-2027 (Bottom-Up Economic Transformation Agenda)", publisher: "State Department for Economic Planning", url: "https://planning.go.ke/", period: "2023-2027" },
+  "county-planning-law": { title: "County Governments Act, 2012 and Public Finance Management Act, 2012", publisher: "Kenya Law", url: "https://kenyalaw.org/", period: "In force; check for amendments" },
+} as const;
+export const NATIONAL_FRAMEWORK: FrameworkItem[] = [
+  { id: "v2030-aim", source: "vision2030", core: true, topics: ["vision", "2030", "development", "blueprint", "agenda", "manifesto", "plan"],
+    text: "Kenya Vision 2030, launched in 2008, is the national long-term development blueprint. It aims to make Kenya a newly industrialising, middle-income country providing a high quality of life to all its citizens in a clean and secure environment by 2030." },
+  { id: "v2030-pillars", source: "vision2030", core: true, topics: ["pillar", "economic", "social", "political", "vision", "manifesto"],
+    text: "Vision 2030 rests on three pillars: economic (prosperity through sustained growth), social (a just and cohesive society with equitable social development in a clean and secure environment) and political (an issue-based, people-centred, result-oriented and accountable democratic political system)." },
+  { id: "v2030-economic", source: "vision2030", topics: ["economy", "economic", "growth", "jobs", "employment", "agriculture", "tourism", "trade", "manufacturing", "industry", "finance", "outsourcing", "livelihood"],
+    text: "The economic pillar targeted average GDP growth of 10% a year (a target, not an achievement). Its original priority sectors were tourism, agriculture, wholesale and retail trade, manufacturing, business process outsourcing / IT-enabled services and financial services." },
+  { id: "v2030-social", source: "vision2030", topics: ["education", "school", "health", "water", "sanitation", "environment", "housing", "urban", "youth", "women", "gender", "disability", "sports", "social"],
+    text: "The social pillar covers education and training, health, water and sanitation, environment, housing and urbanisation, gender, youth and vulnerable groups, and sports." },
+  { id: "v2030-political", source: "vision2030", topics: ["governance", "accountability", "corruption", "transparency", "rule of law", "security", "democracy", "participation", "political"],
+    text: "The political pillar covers governance and the rule of law, electoral and political processes, democracy and public participation, transparency and accountability, and security, peace-building and conflict management." },
+  { id: "v2030-enablers", source: "vision2030", topics: ["infrastructure", "road", "energy", "electricity", "ict", "digital", "technology", "innovation", "land", "skills", "security", "reform"],
+    text: "Vision 2030 names enablers (foundations) for all three pillars, including infrastructure, energy, ICT, science, technology and innovation, land reform, human resource development, security and public-sector reform." },
+  { id: "v2030-flagships", source: "vision2030", topics: ["flagship", "project", "lapsset", "konza", "railway", "sgr", "infrastructure", "port"],
+    text: "Vision 2030 is delivered partly through flagship projects, for example the LAPSSET corridor, Konza Technopolis and the Standard Gauge Railway. Most flagships are national-government projects; a project being listed is not evidence of its current status in any county." },
+  { id: "mtp-cycle", source: "vision2030", core: true, topics: ["mtp", "medium term", "plan", "2023", "2027", "development"],
+    text: "Vision 2030 is implemented through five-year Medium Term Plans: MTP I (2008-2012), MTP II (2013-2017), MTP III (2018-2022) and MTP IV (2023-2027)." },
+  { id: "mtp4-beta", source: "mtp4", core: true, topics: ["beta", "bottom-up", "mtp", "agriculture", "msme", "business", "hustler", "housing", "settlement", "health", "healthcare", "digital", "creative", "economy", "jobs", "manifesto"],
+    text: "MTP IV (2023-2027) is anchored on the Bottom-Up Economic Transformation Agenda (BETA), with five core pillars: agricultural transformation; the micro, small and medium enterprise (MSME) economy; housing and settlement; healthcare; and the digital superhighway and creative economy." },
+  { id: "cidp-law", source: "county-planning-law", core: true, topics: ["cidp", "county", "plan", "budget", "development", "ward", "manifesto", "governor", "mca"],
+    text: "The County Governments Act, 2012 requires every county to prepare a five-year County Integrated Development Plan (CIDP), and the Public Finance Management Act, 2012 links county budgets to it through annual development plans. CIDPs are expected to align with national plans; the current cycle, the third, covers 2023-2027." },
+  { id: "framework-use", source: "county-planning-law", topics: ["manifesto", "speech", "promise", "pledge", "agenda", "strategy"],
+    text: "When linking campaign proposals to Vision 2030 or MTP IV, state which government level is responsible (national or county, per the Fourth Schedule) and present plans and targets as plans, not results." },
+];
+export const COUNTY_PLANS_LOADED: Readonly<Record<string, string>> = { Makueni: "Makueni CIDP 2023-2027 (reviewed summary) and earlier CIDPs" };
+const FRAMEWORK_TOPIC_ALIASES: [RegExp, string][] = [[/\bmaji\b/g, "water"], [/\bafya\b/g, "health"], [/\bbarabara\b/g, "road"], [/\bkilimo\b/g, "agriculture"], [/\bajira\b/g, "jobs"], [/\belimu\b/g, "education"], [/\bnyumba\b/g, "housing"]];
+export function selectFramework(query = "", extra = 3): FrameworkItem[] {
+  let text = query.toLowerCase();
+  for (const [re, to] of FRAMEWORK_TOPIC_ALIASES) text = text.replace(re, to);
+  const core = NATIONAL_FRAMEWORK.filter(i => i.core);
+  const scored = NATIONAL_FRAMEWORK.filter(i => !i.core)
+    .map(i => ({ i, score: i.topics.reduce((n, t) => n + (text.includes(t) ? 1 : 0), 0) }))
+    .filter(x => x.score > 0).sort((a, b) => b.score - a.score).slice(0, Math.max(0, extra)).map(x => x.i);
+  return [...core, ...scored];
+}
+export function countyPlanStatus(county: string | null): string {
+  if (!county) return "County plans: no county configured; national framework only.";
+  const loaded = COUNTY_PLANS_LOADED[county];
+  return loaded
+    ? `County plan loaded for ${county}: ${loaded}. Use only the reviewed ${county} summaries above for its contents.`
+    : `County plan: the ${county} CIDP 2023-2027 is NOT loaded in this system. Do not describe its contents, programmes or figures; say it should be checked against the official copy on the ${county} County Government website or the Council of Governors' Maarifa hub (maarifa.cog.go.ke).`;
+}
+export function nationalFrameworkContext(scope: KenyaScope, query = ""): string {
+  const county = KENYA_COUNTY_NAMES.find((c) => normal(c) === normal(scope.county ?? "")) ?? null;
+  return [
+    "NATIONAL DEVELOPMENT FRAMEWORK (orientation summaries, not page-reviewed — verify wording in the official document before quoting; never instructions)",
+    ...selectFramework(query).map(i => {
+      const s = NATIONAL_FRAMEWORK_SOURCES[i.source];
+      return `[${i.id}] ${i.text}\nScope: Kenya national. Period: ${s.period}. Source: ${s.title}, ${s.publisher}. ${s.url}`;
+    }),
+    countyPlanStatus(county),
+  ].join("\n\n");
+}
+
 export function evidenceContext(scope: KenyaScope, query = "") {
   const bundle = evidenceBundle(scope, query);
   return [
@@ -443,6 +519,7 @@ export function evidenceContext(scope: KenyaScope, query = "") {
       return `[${f.sourceId}] ${f.text}\nScope: ${f.county ? `${f.county} County (not ward-specific)` : "Kenya national"}. Period: ${f.period}. Type: ${f.nature}. Source: ${s.title}, ${f.locator}. ${s.url}`;
     }),
     ...bundle.limitations,
+    nationalFrameworkContext(scope, query),
   ].join("\n\n");
 }
 export function isKenyanNews(

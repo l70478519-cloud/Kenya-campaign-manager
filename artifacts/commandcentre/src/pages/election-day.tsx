@@ -325,6 +325,20 @@ function StationsTab() {
     } catch (e) { setImportMsg(e instanceof Error ? e.message : "Import failed"); }
   }
 
+  const [loadMsg, setLoadMsg] = useState<string | null>(null);
+  async function loadReference() {
+    setLoadMsg("Loading IEBC polling centres…");
+    try {
+      const r = await api<{ area: string; added: number; alreadyPresent: number; unmatched: string[]; ambiguous: { ward: string }[] }>("election-day/stations/load-reference", { method: "POST", body: "{}" });
+      const notes = [
+        r.unmatched.length ? `Not in the IEBC ward list: ${r.unmatched.join(", ")}.` : "",
+        r.ambiguous.length ? `Wards sharing a name in this county: ${r.ambiguous.map(a => a.ward).join(", ")}.` : "",
+      ].filter(Boolean).join(" ");
+      setLoadMsg(`${r.area}: added ${r.added} centres, ${r.alreadyPresent} already listed. ${notes}`.trim());
+      qc.invalidateQueries({ queryKey: getListPollingStationsQueryKey({}) });
+    } catch (e) { setLoadMsg(e instanceof Error ? e.message : "Loading failed"); }
+  }
+
   if (isLoading) return <div className="font-mono text-xs text-muted-foreground p-4">LOADING STATIONS...</div>;
 
   return (
@@ -336,6 +350,13 @@ function StationsTab() {
             Choose CSV file<input type="file" accept=".csv,text/csv" className="sr-only" onChange={e => void importCsv(e.target.files?.[0])} />
           </label>
           {importMsg && <span role="status" className="text-muted-foreground">{importMsg}</span>}
+        </div>
+        <p><strong>Or start from the IEBC register:</strong> loads the polling centres for {CAMPAIGN.areaLabel} only. Centre names only, with KCM- reference codes; importing the official list above later adds the IEBC codes, registered voters and streams to the same rows.</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => void loadReference()} className="inline-flex items-center gap-2 border border-primary/50 rounded-lg px-3 py-2 text-primary font-semibold">
+            Load IEBC polling centres
+          </button>
+          {loadMsg && <span role="status" className="text-muted-foreground">{loadMsg}</span>}
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 sm:gap-4">

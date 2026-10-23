@@ -1,6 +1,8 @@
 import { Router } from "express";
-import { db, pollingStationsTable, tallyResultsTable, electionEventsTable, campaignWards } from "@workspace/db";
-import { eq, sql, desc, and, inArray } from "drizzle-orm";
+import { db, pollingStationsTable, tallyResultsTable, electionEventsTable, campaignWards, currentCampaignProfile } from "@workspace/db";
+import { eq, sql, desc, and, inArray, like } from "drizzle-orm";
+import { campaignArea, referenceStationRows, REFERENCE_CODE_PREFIX } from "../lib/polling-centres";
+import { nameKey } from "../data/kenya-electoral-units";
 
 const router = Router();
 
@@ -67,6 +69,42 @@ router.post("/stations", async (req, res) => {
 });
 
 /**
+ * Loads this campaign's polling centres from the IEBC register bundled with
+ * the app (only the campaign's own wards). Safe to repeat: centres already
+ * present, by code or by name in the same ward, are skipped. Codes start with
+ * KCM- because the register has no IEBC codes; importing the official list
+ * below replaces them and adds registered voters and streams.
+ */
+router.post("/stations/load-reference", async (_req, res) => {
+  const p = currentCampaignProfile();
+  const area = campaignArea({ seat: p?.seat, county: p?.county, constituency: p?.constituency, area: p?.area, wards: campaignWards() });
+  if (area.scope === "national") {
+    res.status(400).json({ error: "Presidential campaigns track results by county. Import polling stations from the official IEBC list per county instead." });
+    return;
+  }
+  const rows = referenceStationRows(area);
+  if (!rows.length) {
+    res.status(400).json({ error: `None of this campaign's wards (${campaignWards().join(", ") || "none set"}) match the IEBC ward list. Check the campaign's seat and area.`, unmatched: area.unmatched });
+    return;
+  }
+  const existing = await db.select({ code: pollingStationsTable.code, name: pollingStationsTable.name, ward: pollingStationsTable.ward })
+    .from(pollingStationsTable).where(inArray(pollingStationsTable.ward, campaignWards()));
+  const codes = new Set(existing.map(e => e.code));
+  const names = new Set(existing.map(e => `${e.ward}|${nameKey(e.name)}`));
+  const fresh = rows.filter(r => !codes.has(r.code) && !names.has(`${r.ward}|${nameKey(r.name)}`));
+  for (let i = 0; i < fresh.length; i += 500) {
+    await db.insert(pollingStationsTable).values(fresh.slice(i, i + 500).map(r => ({
+      code: r.code, name: r.name, ward: r.ward, registeredVoters: 0, streamCount: 1, status: "pending",
+      notes: `IEBC register reference centre (${r.constituency}). Import the official IEBC list for the station code, registered voters and streams.`,
+    })));
+  }
+  res.json({
+    area: area.label, added: fresh.length, alreadyPresent: rows.length - fresh.length, total: rows.length,
+    unmatched: area.unmatched, ambiguous: area.ambiguous, note: area.source.note,
+  });
+});
+
+/**
  * Bulk import of polling stations (e.g. from the IEBC "Registered Voters per
  * Polling Station" list). Rows are matched to this campaign's wards
  * case-insensitively; existing codes are updated, new ones created.
@@ -92,8 +130,13 @@ router.post("/stations/import", async (req, res) => {
     if (!code || !name) { rejected.push({ row: i + 2, error: "Missing station code or name" }); continue; }
     if (!ward) { rejected.push({ row: i + 2, error: `Ward "${wardRaw}" is not one of: ${wards.join(", ")}` }); continue; }
     const [existing] = await db.select({ id: pollingStationsTable.id }).from(pollingStationsTable).where(eq(pollingStationsTable.code, code)).limit(1);
-    if (existing) {
-      await db.update(pollingStationsTable).set({ name, ward, registeredVoters: registered, streamCount: streams }).where(eq(pollingStationsTable.id, existing.id));
+    // An official row for a centre loaded from the reference register takes over that row (keeps agents and status).
+    const reference = existing ? undefined : (await db.select({ id: pollingStationsTable.id, name: pollingStationsTable.name }).from(pollingStationsTable)
+      .where(and(eq(pollingStationsTable.ward, ward), like(pollingStationsTable.code, `${REFERENCE_CODE_PREFIX}%`))))
+      .find(s => nameKey(s.name) === nameKey(name));
+    if (existing || reference) {
+      await db.update(pollingStationsTable).set({ code, name, ward, registeredVoters: registered, streamCount: streams, ...(reference ? { notes: null } : {}) })
+        .where(eq(pollingStationsTable.id, (existing ?? reference)!.id));
       updated++;
     } else {
       await db.insert(pollingStationsTable).values({ code, name, ward, registeredVoters: registered, streamCount: streams, status: "pending" });
