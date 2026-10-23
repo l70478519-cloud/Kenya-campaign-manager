@@ -1,5 +1,6 @@
 import { useAuth } from "@/lib/auth";
 import { CAMPAIGN } from "@/lib/wards";
+import { ReviewQueue, FieldMentionForm, SocialReport } from "@/components/social-review";
 import { useEffect, useMemo, useState } from "react";
 import {
   useListSocialMentions,
@@ -131,11 +132,15 @@ export default function SocialListening() {
   // Scans are manual to avoid repeated provider failures, rate limits and
   // accidental requests whenever the page mounts or refreshes.
 
-  const all = mentions as SocialMention[];
+  // Review state (SL-3): rejected items are hidden; pending items are shown but not counted.
+  type Reviewed = SocialMention & { reviewStatus?: string | null; urgency?: string | null; language?: string | null; confidence?: number | null; classifiedBy?: string | null; channel?: string | null };
+  const all = (mentions as Reviewed[]).filter((m) => m.reviewStatus !== "rejected");
+  const isCounted = (m: Reviewed) => !m.reviewStatus || m.reviewStatus === "auto" || m.reviewStatus === "confirmed";
 
   const counts = useMemo(() => {
-    const c = { total: all.length, positive: 0, negative: 0, neutral: 0 };
-    for (const m of all) {
+    const counted = all.filter(isCounted);
+    const c = { total: counted.length, positive: 0, negative: 0, neutral: 0, pending: all.length - counted.length };
+    for (const m of counted) {
       if (m.sentiment === "positive") c.positive++;
       else if (m.sentiment === "negative") c.negative++;
       else c.neutral++;
@@ -269,6 +274,10 @@ export default function SocialListening() {
         <StatCard label="NEGATIVE" value={counts.negative} tone="text-red-400" />
         <StatCard label="NEUTRAL" value={counts.neutral} tone="text-yellow-400" />
       </div>
+      {counts.pending > 0 && (
+        <p className="font-mono text-[10px] text-amber-300">{counts.pending} mention{counts.pending === 1 ? "" : "s"} awaiting review {counts.pending === 1 ? "is" : "are"} not included in these totals.</p>
+      )}
+      <ReviewQueue canWrite={canDelete} />
       {lastScan && (
         <p className="font-mono text-[10px] text-muted-foreground">
           LAST SCAN: {new Date(lastScan).toLocaleString()}
@@ -331,7 +340,14 @@ export default function SocialListening() {
                     <div className="flex flex-wrap items-center gap-2 mt-2 font-mono text-[10px] text-muted-foreground">
                       <span className={"px-1.5 py-0.5 border " + st.border + " " + st.text}>{m.sentiment.toUpperCase()}</span>
                       <span className="px-1.5 py-0.5 border border-border">{CATEGORY_LABEL[m.category] ?? m.category.toUpperCase()}</span>
+                      {m.reviewStatus === "pending" && <span className="px-1.5 py-0.5 border border-amber-500/40 text-amber-300" title="Not counted in totals until a reviewer confirms it">AWAITING REVIEW</span>}
+                      {m.urgency === "high" && <span className="px-1.5 py-0.5 border border-red-500/50 text-red-400">URGENT</span>}
+                      {m.channel === "field" && <span className="px-1.5 py-0.5 border border-primary/40 text-primary">FIELD REPORT</span>}
                       {m.topic && <span className="px-1.5 py-0.5 bg-secondary/60">{m.topic}</span>}
+                      {m.language && m.language !== "unknown" && <span>{({ en: "English", sw: "Swahili", sheng: "Sheng", mixed: "Mixed" } as Record<string, string>)[m.language] ?? m.language}</span>}
+                      {m.classifiedBy && m.classifiedBy !== "staff" && m.confidence != null && (
+                        <span title={m.classifiedBy === "ai" ? "Labelled by AI" : "Labelled by word lists (no AI)"}>· {m.classifiedBy === "ai" ? "AI" : "word lists"} {m.confidence}%</span>
+                      )}
                       {m.source && <span>· {m.source}</span>}
                       {m.publishedAt && <span>· {m.publishedAt}</span>}
                       {(() => {
@@ -393,6 +409,8 @@ export default function SocialListening() {
           </ul>
         )}
       </div>
+      {canDelete && <FieldMentionForm />}
+      <SocialReport />
     </div>
   );
 }

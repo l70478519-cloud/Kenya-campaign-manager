@@ -12,11 +12,11 @@ Applies to every campaign on the platform: President, Governor, Senator, Woman R
 |---|---|---|
 | 1 | SL-1 Campaign scope and correctness | 6 / 6 |
 | 1 | SL-2 Free, link-verified sources | 5 / 6 |
-| 1 | SL-3 AI classifies, never invents | 0 / 4 |
-| 1 | KOL-1 Measured KOL scores | 0 / 5 |
+| 1 | SL-3 AI classifies, never invents | 4 / 4 |
+| 1 | KOL-1 Measured KOL scores | 5 / 5 |
 | 2 | SL-4 Paid and official platform access | 0 / 4 |
 | 3 | SL-5 Alerts and rapid response | 0 / 3 |
-| | **Total** | **11 / 28** |
+| | **Total** | **20 / 28** |
 
 ## Review of the current module (main at `7804f7b`)
 
@@ -66,28 +66,18 @@ Applies to every campaign on the platform: President, Governor, Senator, Woman R
 - [x] SL-2.6 Clean free-search summaries: the snippet repeats the headline and HTML entities such as `&nbsp;` aren’t decoded (`searchFreeMakueniWeb`).
 
 ### SL-3 AI classifies, never invents
-- [ ] SL-3.1 Classify each stored mention: sentiment, topic, language (English/Swahili/Sheng/other) and urgency, each with a confidence level. Keyword fallback in free mode, labelled as such.
-- [ ] SL-3.2 Review queue: low-confidence or high-urgency items need a human decision before they count in totals.
-- [ ] SL-3.3 Field-reported mentions: radio, barazas, churches and markets, entered by staff with ward and source.
-- [ ] SL-3.4 Reporting: mentions by source, sentiment trend, top topics, all with "as of" time and coverage notes.
+- [x] SL-3.1 Classify each stored mention: sentiment, topic, language (English/Swahili/Sheng/other) and urgency, each with a confidence level. Keyword fallback in free mode, labelled as such.
+- [x] SL-3.2 Review queue: low-confidence or high-urgency items need a human decision before they count in totals.
+- [x] SL-3.3 Field-reported mentions: radio, barazas, churches and markets, entered by staff with ward and source.
+- [x] SL-3.4 Reporting: mentions by source, sentiment trend, top topics, all with "as of" time and coverage notes.
 
 ### KOL-1 Measured KOL scores
-- [ ] KOL-1.1 Several handles per KOL (Facebook, X, TikTok, YouTube, radio programme, offline role).
-- [ ] KOL-1.2 Link mentions to KOLs by handle or name.
-- [ ] KOL-1.3 Transparent influence score with visible weights:
-
-  | Component | What it measures |
-  |---|---|
-  | Reach | Log-scaled followers |
-  | Engagement | How much their audience responds |
-  | Relevance | Share of their posts about the campaign or area |
-  | Stance | Supportive, neutral or hostile, from linked mentions |
-  | Locality | Their ward |
-  | Recency | How recently they were active |
-
-  Manual overrides are allowed but labelled.
-- [ ] KOL-1.4 Offline KOLs (chiefs, clergy, chama, boda-boda and market leaders, MCAs): field-assessed reach and stance with notes.
-- [ ] KOL-1.5 Stance-change history per KOL.
+- [x] KOL-1.1 Several handles per KOL (Facebook, X, TikTok, YouTube, radio programme, offline role).
+- [x] KOL-1.2 Link mentions to KOLs by handle or name.
+- [x] KOL-1.3 Transparent influence score with visible weights: reach 35% (log-scaled followers, or the field estimate of people reached), engagement 20%, relevance 20% (linked mentions in the last 90 days), locality 15%, recency 10%. Dates use when a mention was published, when known. Components without data are left out and the weights re-balanced. Manual overrides need a reason, are labelled, and keep the measured score visible.
+  **Decision:** stance (supporter, neutral, opponent) is shown next to the score, not inside it. An influential opponent must rank high so the team sees them.
+- [x] KOL-1.4 Offline KOLs (chiefs, clergy, chama, boda-boda and market leaders, MCAs): field-assessed reach and stance with notes.
+- [x] KOL-1.5 Stance-change history per KOL.
 
 ## Phase 2 — paid and official access (needs budget or accounts)
 - [ ] SL-4.1 X API (pay-per-use, about $0.005 per post read): targeted searches with a monthly cap set per campaign.

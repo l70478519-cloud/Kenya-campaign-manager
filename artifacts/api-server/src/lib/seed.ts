@@ -4,6 +4,7 @@ import { ensureDemoRequestsTable } from "../routes/public-site";
 import { eq, and, sql } from "drizzle-orm";
 import { hashPassword } from "./auth";
 import { TENANCY_MFA_SQL } from "./tenancy-sql";
+import { KOL_MIGRATION_SQL } from "./kol-sql";
 
 let seeded = false;
 
@@ -20,10 +21,27 @@ export async function ensureAuthColumns(): Promise<void> {
   await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "admin_users_username_unique" ON "admin_users" ("username")`);
 }
 
-// Link-check result for each social listening mention (docs/SOCIAL_LISTENING_PLAN.md, SL-1.5).
+// Social listening mention columns: link checks (SL-1.5), classification, review and field reports (SL-3).
 export async function ensureSocialListeningColumns(): Promise<void> {
   await db.execute(sql`ALTER TABLE "social_mentions" ADD COLUMN IF NOT EXISTS "link_status" text`);
   await db.execute(sql`ALTER TABLE "social_mentions" ADD COLUMN IF NOT EXISTS "link_checked_at" timestamp`);
+  // Classification, review and field reports (SL-3).
+  for (const col of ["language", "urgency", "classified_by", "review_status", "reviewed_by", "channel", "ward", "reported_by"]) {
+    await db.execute(sql.raw(`ALTER TABLE "social_mentions" ADD COLUMN IF NOT EXISTS "${col}" text`));
+  }
+  await db.execute(sql`ALTER TABLE "social_mentions" ADD COLUMN IF NOT EXISTS "confidence" integer`);
+  await db.execute(sql`ALTER TABLE "social_mentions" ADD COLUMN IF NOT EXISTS "reviewed_at" timestamp`);
+}
+
+// Measured KOL scores (KOL-1). Runs the statements of migrations/20261025_kol_measured_scores.sql
+// (copied into lib/kol-sql.ts; a test checks the two are identical).
+export async function ensureKolTables(): Promise<void> {
+  for (const statement of splitSqlStatements(KOL_MIGRATION_SQL)) await db.execute(sql.raw(statement));
+}
+
+/** Splits a migration file into statements (these files have no semicolons inside strings or comments). */
+export function splitSqlStatements(file: string): string[] {
+  return file.split(/;\s*(?:\r?\n|$)/).map(s => s.replace(/^\s*--.*$/gm, "").trim()).filter(Boolean);
 }
 
 // Idempotent DDL for the turnout-prediction assumptions table. Production is
@@ -445,6 +463,7 @@ async function ensureSeededAsOwner(): Promise<void> {
   await ensureCampaignColumns();
   await ensureDemoRequestsTable();
   await ensureSocialListeningColumns();
+  await ensureKolTables();
   await seedDefaultRoles();
   await seedDefaultConfig();
   await ensureBootstrapAdmin();
