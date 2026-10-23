@@ -37,6 +37,7 @@ import commandCentreRouter from "./command-centre";
 import tenancyRouter from "./tenancy";
 import analysisRouter from "./analysis";
 import publicSiteRouter from "./public-site";
+import geographyRouter from "./geography";
 
 const router: IRouter = Router();
 
@@ -78,6 +79,7 @@ router.use("/records", recordsRouter);
 router.use("/system", systemRouter);
 router.use("/command-centre", commandCentreRouter);
 router.use("/tenancy", tenancyRouter);
+router.use("/geography", geographyRouter);
 router.use("/analysis", analysisRouter);
 router.use("/public", publicSiteRouter);
 

@@ -75,7 +75,7 @@ export async function resolveCampaign(req: Request): Promise<number | null> {
   req.campaignConstituency = chosen.constituency ?? null;
   req.campaignProfile = {
     name: chosen.name, candidateName: chosen.candidateName, seat: chosen.seat, constituency: chosen.constituency,
-    county: chosen.county, party: chosen.party, electionDate: chosen.electionDate, profileSummary: chosen.profileSummary,
+    county: chosen.county, party: chosen.party, electionDate: chosen.electionDate, profileSummary: chosen.profileSummary, area: chosen.area,
     // "isPrimary" = the built-in Kaiti content applies (only for a Kaiti campaign in this edition).
     isPrimary: (chosen.constituency ?? "").trim().toLowerCase() === "kaiti",
   };

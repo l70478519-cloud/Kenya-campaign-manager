@@ -9,3 +9,7 @@ Fill these from official IEBC records only, then import them in Command Centre.
 
 Ward names must match the wards of your campaign (set from the seat and area you chose).
 Once both are imported, Strategic SWOT → Path to victory shows turnout, past winners and votes needed per ward.
+
+No official list yet? Election Day → Stations → **Load IEBC polling centres** fills your area's centres from the
+IEBC register (names only, `KCM-` reference codes). Importing the official CSV later upgrades those same rows with
+the IEBC code, registered voters and streams.

@@ -22,6 +22,8 @@ import pg from "pg";
 export type CampaignProfile = {
   name: string; candidateName: string | null; seat: string | null; constituency: string | null; county: string | null;
   party: string | null; electionDate: string | null; profileSummary: string | null; isPrimary: boolean;
+  /** Free-text electoral area, e.g. "Kaiti, Makueni County" (optional for older callers). */
+  area?: string | null;
 };
 type Ctx = { campaignId: number; wards: string[]; constituency: string | null; profile: CampaignProfile | null };
 
