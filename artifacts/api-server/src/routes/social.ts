@@ -1,8 +1,8 @@
 import { publicSourceUrl, PUBLIC_LISTENING_COVERAGE } from "../lib/public-source-quality";
 import { Router } from "express";
 import { z } from "zod/v4";
-import { db, socialMentionsTable, socialSourceHealthTable, narrativeMentionsTable, competitorsTable, campaignWards, currentCampaignProfile } from "@workspace/db";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { db, socialMentionsTable, socialSourceHealthTable, narrativeMentionsTable, competitorsTable, auditLogsTable, campaignWards, currentCampaignProfile } from "@workspace/db";
+import { eq, and, desc, inArray, isNull, gte, sql } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { requireAuth, requirePermission } from "../lib/auth";
 import { searchFreeMakueniWeb, classifySentiment } from "./makueni-free-ai";
@@ -10,6 +10,7 @@ import { searchScope, categoryQueries, categoryPrompt, type CategoryKey, type Se
 import { checkLinks } from "../lib/link-check";
 import { cleanText, cleanSummary, dedupeStories } from "../lib/social-text";
 import { fetchKenyanFeeds, searchYouTube, type SourceHealth, type SourceItem } from "../lib/social-sources";
+import { classifyByRules, needsReview, classificationPrompt, parseAiClassifications, detectLanguage, COUNTED_MENTIONS_SQL, type Classification } from "../lib/social-classify";
 
 const router = Router();
 // Social listening is open to every signed-in user (view, search, scan).
@@ -179,6 +180,52 @@ async function collectFeedsAndVideos(scope: SearchScope, competitors: string[]):
   return { items: items.slice(0, 40), health };
 }
 
+/**
+ * Labels mentions (sentiment, topic, language, urgency, confidence). Uses the
+ * AI when one is configured and the scan isn't in free mode; anything the AI
+ * doesn't return in a valid form falls back to the word-list classifier.
+ */
+async function classifyTexts(texts: string[], scope: SearchScope, useAi: boolean, log: { warn: (o: object, m: string) => void }): Promise<Classification[]> {
+  const result: (Classification | undefined)[] = new Array(texts.length);
+  if (useAi && texts.length) {
+    const context = `${scope.candidate}${scope.office ? `, ${scope.office} race` : ""}${scope.areaLabel ? `, ${scope.areaLabel}` : ""}`;
+    for (let start = 0; start < texts.length; start += 20) {
+      const batch = texts.slice(start, start + 20).map((text, i) => ({ id: start + i + 1, text }));
+      try {
+        const response = await openai.responses.create({ model: "gpt-5.1", input: classificationPrompt(batch, context) });
+        const labels = parseAiClassifications(response.output_text ?? "", batch.map(b => b.id));
+        for (const b of batch) result[b.id - 1] = labels.get(b.id);
+      } catch (err) {
+        log.warn({ err }, "AI classification unavailable; using word-list classification");
+        break;
+      }
+    }
+  }
+  return texts.map((text, i) => result[i] ?? classifyByRules(text));
+}
+
+function classificationColumns(c: Classification, fallbackTopic: string | null) {
+  return {
+    sentiment: c.sentiment,
+    topic: c.topic ?? fallbackTopic,
+    language: c.language,
+    urgency: c.urgency,
+    confidence: c.confidence,
+    classifiedBy: c.classifiedBy,
+    reviewStatus: needsReview(c) ? "pending" : "auto",
+  };
+}
+
+const actorOf = (req: { currentUser?: { email?: string | null; name?: string | null } }) =>
+  ({ email: req.currentUser?.email ?? "unknown", name: req.currentUser?.name ?? req.currentUser?.email ?? "unknown" });
+
+async function audit(req: { currentUser?: { email?: string | null; name?: string | null } }, action: string, details: string) {
+  try {
+    const a = actorOf(req);
+    await db.insert(auditLogsTable).values({ userEmail: a.email, userName: a.name, action, module: "social", details, severity: "info" });
+  } catch { /* non-critical */ }
+}
+
 /** Records the outcome of one source for this campaign (row-level security scopes the rows). */
 async function recordSourceHealth(sourceKey: string, values: { sourceType: string; failed: boolean; count: number; error?: string }, now: Date) {
   const set = {
@@ -310,6 +357,10 @@ router.post("/scan", async (req, res) => {
     toInsert.push({ ...m, linkStatus: check.status, linkCheckedAt: checkedAt });
   }
 
+  // Label each new mention. The AI (when configured) only labels the text; it never adds items.
+  const labels = await classifyTexts(toInsert.map(m => m.summary), scope, !freeMode, req.log);
+  toInsert.forEach((m, i) => Object.assign(m, classificationColumns(labels[i], m.topic ?? null)));
+
   let inserted: (typeof socialMentionsTable.$inferSelect)[] = [];
   if (toInsert.length > 0) {
     inserted = await db.insert(socialMentionsTable).values(toInsert).returning();
@@ -338,6 +389,22 @@ router.post("/scan", async (req, res) => {
     }
   }
 
+  // Catch up older mentions saved before classification existed (a few per scan).
+  let backfilled = 0;
+  try {
+    const older = await db.select({ id: socialMentionsTable.id, summary: socialMentionsTable.summary, topic: socialMentionsTable.topic })
+      .from(socialMentionsTable).where(isNull(socialMentionsTable.classifiedBy)).limit(50);
+    if (older.length) {
+      const olderLabels = await classifyTexts(older.map(o => o.summary), scope, !freeMode, req.log);
+      for (const [i, o] of older.entries()) {
+        await db.update(socialMentionsTable).set(classificationColumns(olderLabels[i], o.topic)).where(eq(socialMentionsTable.id, o.id));
+      }
+      backfilled = older.length;
+    }
+  } catch (err) {
+    req.log.warn({ err }, "classifying older mentions failed; will retry on the next scan");
+  }
+
   const now = new Date();
   await Promise.all(categories.map((cat) => recordSourceHealth(cat.key, {
     sourceType: freeMode || usedFallback.has(cat.key) ? "google_news_rss" : "openai_web_search",
@@ -359,6 +426,11 @@ router.post("/scan", async (req, res) => {
     skippedCategories,
     links: linkSummary,
     sources: extra.health.map(({ key, label, ok, items }) => ({ key, label, ok, items })),
+    review: {
+      pending: inserted.filter(m => m.reviewStatus === "pending").length,
+      classifiedBy: freeMode ? "rules" : labels.some(l => l.classifiedBy === "ai") ? "ai" : "rules",
+      olderMentionsClassified: backfilled,
+    },
     area: scope.areaLabel || null,
     ...PUBLIC_LISTENING_COVERAGE,
     checkedAt: new Date().toISOString(),
@@ -374,6 +446,139 @@ router.post("/scan", async (req, res) => {
     state.inFlight = false;
     state.lastAt = Date.now();
   }
+});
+
+// ── Review queue (SL-3.2) ─────────────────────────────────────────────
+// Urgent items and uncertain opinions wait here; they don't count in totals
+// until a person confirms them. POST routes need Intelligence write access.
+
+router.get("/review", async (_req, res) => {
+  const items = await db.select().from(socialMentionsTable)
+    .where(eq(socialMentionsTable.reviewStatus, "pending"))
+    .orderBy(desc(socialMentionsTable.scannedAt)).limit(200);
+  res.json(items);
+});
+
+const reviewSchema = z.object({
+  decision: z.enum(["confirm", "reject"]),
+  sentiment: z.enum(["positive", "negative", "neutral"]).optional(),
+  urgency: z.enum(["high", "normal", "low"]).optional(),
+  topic: z.string().trim().min(1).max(40).optional(),
+});
+
+router.post("/mentions/:id/review", async (req, res) => {
+  const id = idParamSchema.safeParse(req.params);
+  const body = reviewSchema.safeParse(req.body);
+  if (!id.success || !body.success) return res.status(400).json({ error: "Choose confirm or reject; corrections must be valid labels." });
+  const { decision, sentiment, urgency, topic } = body.data;
+  const [updated] = await db.update(socialMentionsTable).set({
+    reviewStatus: decision === "confirm" ? "confirmed" : "rejected",
+    reviewedBy: actorOf(req).email,
+    reviewedAt: new Date(),
+    ...(sentiment ? { sentiment } : {}),
+    ...(urgency ? { urgency } : {}),
+    ...(topic ? { topic } : {}),
+  }).where(eq(socialMentionsTable.id, id.data.id)).returning();
+  if (!updated) return res.status(404).json({ error: "Mention not found" });
+  const changes = [sentiment && `sentiment ${sentiment}`, urgency && `urgency ${urgency}`, topic && `topic ${topic}`].filter(Boolean).join(", ");
+  await audit(req, decision === "confirm" ? "Confirmed social mention" : "Rejected social mention", `#${updated.id}${changes ? ` (${changes})` : ""}: ${updated.summary.slice(0, 120)}`);
+  return res.json(updated);
+});
+
+// ── Field-reported mentions (SL-3.3) ───────────────────────────────────
+// Radio, barazas, churches, markets: what staff heard in person.
+
+const fieldMentionSchema = z.object({
+  summary: z.string().trim().min(5).max(500),
+  sourceName: z.string().trim().min(2).max(120),
+  sourceType: z.enum(["radio", "baraza", "church", "market", "meeting", "other"]),
+  ward: z.string().trim().min(1).max(80),
+  category: z.enum(["candidate", "issues", "competitor", "opponent"]),
+  sentiment: z.enum(["positive", "negative", "neutral"]),
+  urgency: z.enum(["high", "normal", "low"]).optional(),
+  heardOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+router.post("/field-mentions", async (req, res) => {
+  const parsed = fieldMentionSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Check the field report" });
+  const f = parsed.data;
+  if (f.ward !== "all" && !campaignWards().includes(f.ward)) {
+    return res.status(400).json({ error: "Choose one of this campaign's wards (or the whole area)." });
+  }
+  const rules = classifyByRules(f.summary);
+  const reporter = actorOf(req).email;
+  const [created] = await db.insert(socialMentionsTable).values({
+    summary: cleanText(f.summary).slice(0, 500),
+    source: `${f.sourceName} (${f.sourceType})`,
+    url: null,
+    sentiment: f.sentiment,
+    category: f.category,
+    topic: rules.topic,
+    publishedAt: f.heardOn ?? null,
+    linkStatus: "field",
+    language: detectLanguage(f.summary),
+    urgency: f.urgency ?? rules.urgency,
+    confidence: null,
+    classifiedBy: "staff",
+    reviewStatus: "confirmed",
+    reviewedBy: reporter,
+    reviewedAt: new Date(),
+    channel: "field",
+    ward: f.ward,
+    reportedBy: reporter,
+  }).returning();
+  await audit(req, "Logged field mention", `#${created.id} ${f.sourceType} · ${f.sourceName} · ${f.ward}: ${created.summary.slice(0, 120)}`);
+  return res.status(201).json(created);
+});
+
+// ── Report (SL-3.4) ────────────────────────────────────────────────────
+
+router.get("/report", async (req, res) => {
+  const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
+  const since = new Date(Date.now() - days * 24 * 3600_000);
+  const inWindow = gte(socialMentionsTable.scannedAt, since);
+  const counted = and(inWindow, sql.raw(COUNTED_MENTIONS_SQL));
+  const group = async (column: typeof socialMentionsTable.source | typeof socialMentionsTable.topic | typeof socialMentionsTable.language | typeof socialMentionsTable.sentiment | typeof socialMentionsTable.channel | typeof socialMentionsTable.classifiedBy, limit = 10) =>
+    (await db.select({ key: column, count: sql<number>`count(*)::int` }).from(socialMentionsTable).where(counted)
+      .groupBy(column).orderBy(desc(sql`count(*)`)).limit(limit))
+      .map(r => ({ key: r.key ?? "unknown", count: Number(r.count) }));
+
+  const [status] = await db.select({
+    counted: sql<number>`count(*) FILTER (WHERE ${sql.raw(COUNTED_MENTIONS_SQL)})::int`,
+    pending: sql<number>`count(*) FILTER (WHERE review_status = 'pending')::int`,
+    rejected: sql<number>`count(*) FILTER (WHERE review_status = 'rejected')::int`,
+    urgent: sql<number>`count(*) FILTER (WHERE urgency = 'high' AND review_status IS DISTINCT FROM 'rejected')::int`,
+  }).from(socialMentionsTable).where(inWindow);
+
+  const weekly = await db.select({
+    week: sql<string>`to_char(date_trunc('week', ${socialMentionsTable.scannedAt}), 'YYYY-MM-DD')`,
+    positive: sql<number>`count(*) FILTER (WHERE ${socialMentionsTable.sentiment} = 'positive')::int`,
+    negative: sql<number>`count(*) FILTER (WHERE ${socialMentionsTable.sentiment} = 'negative')::int`,
+    neutral: sql<number>`count(*) FILTER (WHERE ${socialMentionsTable.sentiment} = 'neutral')::int`,
+  }).from(socialMentionsTable).where(counted)
+    .groupBy(sql`date_trunc('week', ${socialMentionsTable.scannedAt})`).orderBy(sql`date_trunc('week', ${socialMentionsTable.scannedAt})`);
+
+  res.json({
+    asOf: new Date().toISOString(),
+    days,
+    since: since.toISOString(),
+    totals: { counted: Number(status?.counted ?? 0), pendingReview: Number(status?.pending ?? 0), rejected: Number(status?.rejected ?? 0), urgent: Number(status?.urgent ?? 0) },
+    bySentiment: await group(socialMentionsTable.sentiment),
+    bySource: await group(socialMentionsTable.source),
+    byChannel: (await group(socialMentionsTable.channel)).map(r => ({ ...r, key: r.key === "unknown" ? "web" : r.key })),
+    byLanguage: await group(socialMentionsTable.language),
+    topTopics: await group(socialMentionsTable.topic, 8),
+    labelledBy: await group(socialMentionsTable.classifiedBy),
+    weekly: weekly.map(w => ({ week: w.week, positive: Number(w.positive), negative: Number(w.negative), neutral: Number(w.neutral) })),
+    notes: [
+      PUBLIC_LISTENING_COVERAGE.coverage,
+      PUBLIC_LISTENING_COVERAGE.sentimentMethod,
+      "Counts include only mentions accepted automatically or confirmed by a reviewer; pending and rejected items are excluded.",
+      "Dates are when a mention was collected or logged, not necessarily when it was published.",
+      "Field mentions are entered by staff and reflect what was heard in person; they are not a sample of public opinion.",
+    ],
+  });
 });
 
 router.get("/search-feed", async (req, res) => {

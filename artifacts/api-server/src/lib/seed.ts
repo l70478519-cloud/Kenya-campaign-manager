@@ -19,10 +19,16 @@ export async function ensureAuthColumns(): Promise<void> {
   await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS "admin_users_username_unique" ON "admin_users" ("username")`);
 }
 
-// Link-check result for each social listening mention (docs/SOCIAL_LISTENING_PLAN.md, SL-1.5).
+// Social listening mention columns: link checks (SL-1.5), classification, review and field reports (SL-3).
 export async function ensureSocialListeningColumns(): Promise<void> {
   await db.execute(sql`ALTER TABLE "social_mentions" ADD COLUMN IF NOT EXISTS "link_status" text`);
   await db.execute(sql`ALTER TABLE "social_mentions" ADD COLUMN IF NOT EXISTS "link_checked_at" timestamp`);
+  // Classification, review and field reports (SL-3).
+  for (const col of ["language", "urgency", "classified_by", "review_status", "reviewed_by", "channel", "ward", "reported_by"]) {
+    await db.execute(sql.raw(`ALTER TABLE "social_mentions" ADD COLUMN IF NOT EXISTS "${col}" text`));
+  }
+  await db.execute(sql`ALTER TABLE "social_mentions" ADD COLUMN IF NOT EXISTS "confidence" integer`);
+  await db.execute(sql`ALTER TABLE "social_mentions" ADD COLUMN IF NOT EXISTS "reviewed_at" timestamp`);
 }
 
 // Idempotent DDL for the turnout-prediction assumptions table. Production is

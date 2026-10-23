@@ -28,6 +28,7 @@ import {
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { CAMPAIGN_CONTEXT } from "./ai";
+import { COUNTED_MENTIONS_SQL } from "../lib/social-classify";
 
 const router = Router();
 
@@ -277,6 +278,7 @@ async function aggSentiment(): Promise<AggregateResult> {
   const rows = await db
     .select({ sentiment: socialMentionsTable.sentiment, count: sql<number>`count(*)::int` })
     .from(socialMentionsTable)
+    .where(sql.raw(COUNTED_MENTIONS_SQL)) // excludes mentions pending review or rejected
     .groupBy(socialMentionsTable.sentiment);
   return {
     chartType: "pie",
@@ -345,7 +347,8 @@ async function computeHeadlineMetrics(): Promise<Record<string, number>> {
       total: sql<number>`count(*)::int`,
       negative: sql<number>`count(*) FILTER (WHERE ${socialMentionsTable.sentiment} = 'negative')::int`,
     })
-    .from(socialMentionsTable);
+    .from(socialMentionsTable)
+    .where(sql.raw(COUNTED_MENTIONS_SQL));
   const [donations] = await db.select({ totalKes: sql<number>`COALESCE(sum(${donationsTable.amount}), 0)::int`, count: sql<number>`count(*)::int` }).from(donationsTable);
   const [vols] = await db.select({ count: sql<number>`count(*)::int` }).from(volunteersTable);
   const [visits] = await db.select({ count: sql<number>`count(*)::int` }).from(canvassVisitsTable);

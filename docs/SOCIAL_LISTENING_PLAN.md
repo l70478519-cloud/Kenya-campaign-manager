@@ -12,11 +12,11 @@ Applies to every campaign on the platform: President, Governor, Senator, Woman R
 |---|---|---|
 | 1 | SL-1 Campaign scope and correctness | 6 / 6 |
 | 1 | SL-2 Free, link-verified sources | 5 / 6 |
-| 1 | SL-3 AI classifies, never invents | 0 / 4 |
+| 1 | SL-3 AI classifies, never invents | 4 / 4 |
 | 1 | KOL-1 Measured KOL scores | 0 / 5 |
 | 2 | SL-4 Paid and official platform access | 0 / 4 |
 | 3 | SL-5 Alerts and rapid response | 0 / 3 |
-| | **Total** | **11 / 28** |
+| | **Total** | **15 / 28** |
 
 ## Review of the current module (main at `7804f7b`)
 
@@ -66,10 +66,10 @@ Applies to every campaign on the platform: President, Governor, Senator, Woman R
 - [x] SL-2.6 Clean free-search summaries: the snippet repeats the headline and HTML entities such as `&nbsp;` aren’t decoded (`searchFreeMakueniWeb`).
 
 ### SL-3 AI classifies, never invents
-- [ ] SL-3.1 Classify each stored mention: sentiment, topic, language (English/Swahili/Sheng/other) and urgency, each with a confidence level. Keyword fallback in free mode, labelled as such.
-- [ ] SL-3.2 Review queue: low-confidence or high-urgency items need a human decision before they count in totals.
-- [ ] SL-3.3 Field-reported mentions: radio, barazas, churches and markets, entered by staff with ward and source.
-- [ ] SL-3.4 Reporting: mentions by source, sentiment trend, top topics, all with "as of" time and coverage notes.
+- [x] SL-3.1 Classify each stored mention: sentiment, topic, language (English/Swahili/Sheng/other) and urgency, each with a confidence level. Keyword fallback in free mode, labelled as such.
+- [x] SL-3.2 Review queue: low-confidence or high-urgency items need a human decision before they count in totals.
+- [x] SL-3.3 Field-reported mentions: radio, barazas, churches and markets, entered by staff with ward and source.
+- [x] SL-3.4 Reporting: mentions by source, sentiment trend, top topics, all with "as of" time and coverage notes.
 
 ### KOL-1 Measured KOL scores
 - [ ] KOL-1.1 Several handles per KOL (Facebook, X, TikTok, YouTube, radio programme, offline role).

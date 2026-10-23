@@ -2,6 +2,7 @@ import { Router } from "express";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { db, strategistConversations, strategistMessages, currentCampaignProfile } from "@workspace/db";
 import { sql, eq, desc, asc } from "drizzle-orm";
+import { COUNTED_MENTIONS_SQL } from "../lib/social-classify";
 import { CAMPAIGN_CONTEXT } from "./ai";
 import { buildFreeMakueniAnswer, fetchMakueniOfficialSources, searchFreeMakueniWeb } from "./makueni-free-ai";
 import { requireAuth } from "../lib/auth";
@@ -53,8 +54,9 @@ async function buildLiveDigest(): Promise<string> {
     num(`SELECT count(*) FROM milestones WHERE status = 'completed'`),
     num(`SELECT coalesce(sum(amount),0) FROM donations`),
     num(`SELECT coalesce(sum(amount),0) FROM pledges WHERE status = 'pending'`),
-    num(`SELECT count(*) FROM social_mentions WHERE sentiment = 'negative'`),
-    num(`SELECT count(*) FROM social_mentions WHERE sentiment = 'positive'`),
+    // Only mentions accepted automatically or confirmed in review.
+    num(`SELECT count(*) FROM social_mentions WHERE sentiment = 'negative' AND ${COUNTED_MENTIONS_SQL}`),
+    num(`SELECT count(*) FROM social_mentions WHERE sentiment = 'positive' AND ${COUNTED_MENTIONS_SQL}`),
   ]);
 
   let supportByWard: string = "no ward-level support data yet";

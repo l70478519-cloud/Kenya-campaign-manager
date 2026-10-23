@@ -16,6 +16,19 @@ export const socialMentionsTable = pgTable("social_mentions", {
   /** verified (link opened), unconfirmed (site blocked the check), feed (from a news feed, not fetched). */
   linkStatus: text("link_status"),
   linkCheckedAt: timestamp("link_checked_at"),
+  // Classification (SL-3.1): language en|sw|sheng|mixed|unknown; urgency high|normal|low; confidence 0-100; by ai|rules|staff.
+  language: text("language"),
+  urgency: text("urgency"),
+  confidence: integer("confidence"),
+  classifiedBy: text("classified_by"),
+  // Review (SL-3.2): auto (counted), pending (waits for a person), confirmed, rejected. Null on older rows = counted.
+  reviewStatus: text("review_status"),
+  reviewedBy: text("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at"),
+  // Field reports (SL-3.3): channel "field" with the reporting ward and staff member; null = public web.
+  channel: text("channel"),
+  ward: text("ward"),
+  reportedBy: text("reported_by"),
   scannedAt: timestamp("scanned_at").notNull().defaultNow(),
 });
 
