@@ -69,3 +69,13 @@ Needs Node 24, pnpm 11 and PostgreSQL 16. On Windows, use **Git Bash**.
    PORT=5173 BASE_PATH=/ pnpm --filter @workspace/commandcentre run dev
    ```
    Open http://localhost:5173/login. The app's dev server forwards `/api` and `/s/` to the API. If the API runs elsewhere, set `API_PROXY_TARGET` (e.g. `API_PROXY_TARGET=http://localhost:8180`).
+
+### Client sign-in
+
+Each client deployment starts with one root account, so there is no sign-up step and two-factor sign-in is off by default.
+
+1. Set `BOOTSTRAP_ADMIN_EMAIL` to the client's email and `BOOTSTRAP_ADMIN_PASSWORD` to a temporary password. Share both with the client.
+2. The client signs in with that email and the temporary password. Before anything else opens, they must choose their own password (at least 12 characters). The server enforces this, not just the app.
+3. Later, under **Account security**, they can change their sign-in email or password, and turn on two-factor sign-in if they want it.
+
+Passwords that an administrator generates for a new user, or by resetting a password, are temporary in the same way. Password and email changes are recorded in the audit log, and a password change signs the account out on its other devices. To require two-factor sign-in for some roles, list them in `MFA_REQUIRED_ROLES` (e.g. `super-admin`); leave it empty to keep it optional.

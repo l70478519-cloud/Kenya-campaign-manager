@@ -27,6 +27,8 @@ declare module "express-session" {
     pendingMfaAt?: number;
     /** Signed in, but the role requires 2FA and the user hasn't enrolled yet. */
     mfaEnrollRequired?: boolean;
+    /** Signed in with a temporary password that must be changed before anything else. */
+    passwordChangeRequired?: boolean;
     activeCampaignId?: number;
   }
 }
@@ -56,6 +58,7 @@ export function emergencyUser(): AdminUser {
     lastLoginAt: new Date(),
     createdAt: new Date(),
     updatedAt: new Date(),
+    mustChangePassword: false,
   };
 }
 

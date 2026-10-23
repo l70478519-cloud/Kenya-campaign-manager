@@ -20,6 +20,8 @@ interface AuthState {
   /** Role requires 2FA and the user hasn't set it up yet. */
   mfaEnrollmentRequired: boolean;
   mfaEnabled: boolean;
+  /** Signed in with a temporary password; must choose their own before anything else. */
+  passwordChangeRequired: boolean;
   /** Resolves "mfa" when a second-factor code is needed next. */
   login: (identifier: string, password: string) => Promise<"ok" | "mfa">;
   verifyMfa: (code: string) => Promise<{ usedRecoveryCode: boolean }>;
@@ -36,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [mfaEnrollmentRequired, setMfaEnrollmentRequired] = useState(false);
   const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [passwordChangeRequired, setPasswordChangeRequired] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -46,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setPermissions(d.permissions ?? {});
         setMfaEnrollmentRequired(d.mfaEnrollmentRequired === true);
         setMfaEnabled(d.mfaEnabled === true);
+        setPasswordChangeRequired(d.passwordChangeRequired === true);
       } else {
         setUser(null);
         setPermissions({});
@@ -76,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(d.user);
     setPermissions(d.permissions ?? {});
     setMfaEnrollmentRequired(d.mfaEnrollmentRequired === true);
+    setPasswordChangeRequired(d.passwordChangeRequired === true);
     return "ok" as const;
   }, []);
 
@@ -92,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPermissions(d.permissions ?? {});
     setMfaEnabled(true);
     setMfaEnrollmentRequired(false);
+    setPasswordChangeRequired(d.passwordChangeRequired === true);
     return { usedRecoveryCode: d.usedRecoveryCode === true };
   }, []);
 
@@ -101,6 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPermissions({});
     setMfaEnrollmentRequired(false);
     setMfaEnabled(false);
+    setPasswordChangeRequired(false);
   }, []);
 
   const can = useCallback((module: string, level: PermLevel = "read") => {
@@ -113,7 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [permissions, user?.role]);
 
   return (
-    <AuthContext.Provider value={{ user, permissions, loading, mfaEnrollmentRequired, mfaEnabled, login, verifyMfa, logout, refresh, can }}>
+    <AuthContext.Provider value={{ user, permissions, loading, mfaEnrollmentRequired, mfaEnabled, passwordChangeRequired, login, verifyMfa, logout, refresh, can }}>
       {children}
     </AuthContext.Provider>
   );

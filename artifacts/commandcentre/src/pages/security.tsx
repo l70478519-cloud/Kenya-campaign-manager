@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ShieldCheck, Copy, Download, KeyRound, Smartphone } from "lucide-react";
 import { api } from "@/lib/records";
 import { useAuth } from "@/lib/auth";
+import { AccountSettings } from "@/components/account-settings";
 
 type Status = { enabled: boolean; required: boolean; recoveryCodesLeft: number };
 
@@ -69,7 +70,7 @@ export default function Security() {
   return <div className="space-y-5 max-w-2xl min-w-0">
     <header>
       <h1 className="text-2xl font-bold flex items-center gap-2"><ShieldCheck className="text-primary" size={24} /> Account security</h1>
-      <p className="text-sm text-muted-foreground">Two-factor sign-in asks for a code from your phone after your password, so a stolen password alone can’t open your account.</p>
+      <p className="text-sm text-muted-foreground">Your sign-in email and password, and optional two-factor sign-in: a code from your phone after your password, so a stolen password alone can’t open your account.</p>
     </header>
     {mfaEnrollmentRequired && !codes && <p role="alert" className="border border-amber-500/50 bg-amber-950/30 rounded-xl p-3 text-sm text-amber-100">Your role requires two-factor sign-in. Set it up below to continue to Command Centre.</p>}
     {usedRecovery && <p role="alert" className="border border-amber-500/50 rounded-xl p-3 text-sm">You signed in with a recovery code. If you no longer have your authenticator app, ask an administrator to reset two-factor sign-in, then set it up again.</p>}
@@ -109,5 +110,6 @@ export default function Security() {
       </form>
     </section>}
     {status.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+    {!mfaEnrollmentRequired && <AccountSettings />}
   </div>;
 }

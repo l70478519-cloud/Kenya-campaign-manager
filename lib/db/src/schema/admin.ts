@@ -15,6 +15,8 @@ export const adminUsersTable = pgTable("admin_users", {
   lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  /** Temporary password (root admin from setup, created by an admin, or reset): must be changed at next sign-in. */
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
 });
 
 export const adminRolesTable = pgTable("admin_roles", {
