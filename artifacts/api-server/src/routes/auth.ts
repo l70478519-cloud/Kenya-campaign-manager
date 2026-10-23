@@ -322,6 +322,7 @@ router.post("/account/email", async (req, res) => {
   const user = await getSessionUser(req);
   if (!user) { res.status(401).json({ error: "Not authenticated" }); return; }
   if (isEmergencySession(req) || !user.passwordHash) { res.status(400).json({ error: "This account's email can't be changed here." }); return; }
+  if (req.session.passwordChangeRequired) { res.status(403).json({ error: "Choose your own password first.", passwordChangeRequired: true }); return; }
   const body = z.object({ currentPassword: z.string().min(1, "Enter your current password."), newEmail: z.string().trim().toLowerCase().email("Enter a valid email address.").max(254) }).safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.issues[0]?.message ?? "Check the email address" }); return; }
   if (tooManyAttempts(`account:${user.id}`, 10, 15 * 60_000)) { res.status(429).json({ error: "Too many attempts. Wait 15 minutes and try again." }); return; }
