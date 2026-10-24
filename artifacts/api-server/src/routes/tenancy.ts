@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
-import { campaignsForUser, invalidateTenancyCache, PRIMARY_CAMPAIGN_ID } from "../lib/tenancy";
+import { campaignsForUser, invalidateTenancyCache, isSuperAdmin, PRIMARY_CAMPAIGN_ID } from "../lib/tenancy";
 import { tenantEnforcementActive, runAsSystem } from "@workspace/db";
 import { isolationStatus } from "../lib/tenant-isolation";
 import { KENYA_COUNTIES, KENYA_SEATS, KENYA_TOTALS, SEAT_KEYS, unitsForSeat } from "../data/kenya-electoral-units";
@@ -143,6 +143,32 @@ router.get("/campaigns/:id/members", async (req, res) => {
   const r = await db.execute(sql`SELECT u.id::int, u.name, u.email, u.role, m.added_by AS "addedBy", m.added_at AS "addedAt"
     FROM public.kaiti_campaign_members m JOIN admin_users u ON u.id = m.user_id WHERE m.campaign_id = ${Number(req.params.id)} ORDER BY u.name`);
   res.json(r.rows);
+});
+
+/**
+ * Opens a campaign for the signed-in administrator: makes it their active
+ * campaign, so every module shows that candidate's seat and area. Super-admins
+ * can already open every campaign. Other administrators are added as members
+ * first; if this is their first membership they are also added to the primary
+ * campaign, because people with no memberships work there by default.
+ */
+router.post("/campaigns/:id/open", async (req, res) => {
+  const id = Number(req.params.id);
+  const user = req.currentUser!;
+  const c = (await db.execute(sql`SELECT id::int, name, status FROM public.kaiti_campaigns WHERE id = ${id}`)).rows[0] as { id: number; name: string; status: string } | undefined;
+  if (!Number.isInteger(id) || !c) { res.status(404).json({ error: "Campaign not found." }); return; }
+  if (c.status === "archived") { res.status(400).json({ error: `“${c.name}” is archived. Set it to Active to open it.` }); return; }
+  if (!isSuperAdmin(user) && user.id > 0) {
+    const hadAny = (await db.execute(sql`SELECT 1 FROM public.kaiti_campaign_members WHERE user_id = ${user.id} LIMIT 1`)).rows.length > 0;
+    if (!hadAny && id !== PRIMARY_CAMPAIGN_ID) {
+      await db.execute(sql`INSERT INTO public.kaiti_campaign_members (campaign_id, user_id, added_by) VALUES (${PRIMARY_CAMPAIGN_ID}, ${user.id}, ${actor(req)}) ON CONFLICT DO NOTHING`);
+    }
+    await db.execute(sql`INSERT INTO public.kaiti_campaign_members (campaign_id, user_id, added_by) VALUES (${id}, ${user.id}, ${actor(req)}) ON CONFLICT DO NOTHING`);
+    await log(actor(req), "Opened campaign (added self as member)", `campaign #${id}`);
+  }
+  invalidateTenancyCache(user.id);
+  req.session.activeCampaignId = id;
+  res.json({ activeCampaignId: id });
 });
 
 router.post("/campaigns/:id/members", async (req, res) => {

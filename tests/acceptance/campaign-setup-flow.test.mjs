@@ -3,25 +3,34 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const src = (p) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8');
 
-test('campaign setup asks for the political party, not an organisation', () => {
+test('a campaign is set up from the candidate name and affiliated party only', () => {
   const page = src('artifacts/commandcentre/src/pages/tenancy-admin.tsx');
-  assert.doesNotMatch(page, /createOrg|New organisation, e\.g\.|Campaign organisation|label className="text-sm">Organisation/);
-  assert.match(page, />Political party<input/);
-  assert.match(page, /const partyName = np\.party\.trim\(\) \|\| "Independent";/, 'an empty party means Independent');
-  // The party groups campaigns behind the scenes; it is created on first use and reused after.
+  assert.doesNotMatch(page, /createOrg|New organisation, e\.g\.|Campaign organisation|label className="text-sm">Organisation|>Campaign name</);
+  assert.match(page, /<CandidateFields v=\{np\} set=\{setNp\} parties=\{parties\} required \/>/);
+  assert.match(page, />Candidate name<input required=\{required\} minLength=\{2\}/);
+  assert.match(page, />Affiliated party<input value=\{v\.party\}/, 'party is typed freely');
+  assert.match(page, /const partyName = np\.party\.trim\(\) \|\| "Independent";/, 'empty party means Independent');
+  // The party groups campaigns behind the scenes: reused with its own spelling, or created on first use.
   assert.match(page, /api<Org>\("tenancy\/organisations", \{ method: "POST", body: JSON\.stringify\(\{ name: partyName \}\) \}\)/);
-  assert.match(page, /o\.id !== PRIMARY_ORG_ID && o\.name\.trim\(\)\.toLowerCase\(\) === partyName\.toLowerCase\(\)/);
-  assert.match(page, /\.\.\.profilePayload\(\{ \.\.\.np, party: party\.name \}, true\)/, 'typed \"uda\" saves as the existing \"UDA\"');
+  assert.match(page, /\.\.\.profilePayload\(\{ \.\.\.np, party: party\.name \}, true\)/);
+  // Campaign name is generated: "Emmanuel Okatch — MP, Homa Bay Town".
+  assert.match(page, /organisationId: party\.id, name: campaignName,/);
+  assert.match(page, /area\.seat === "MP" \? area\.constituency/);
 });
 
-test('after creating, the new campaign is shown filled in with Add members and an Open button', () => {
+test('every campaign opens on its seat area; the server adds admins as members when needed', () => {
   const page = src('artifacts/commandcentre/src/pages/tenancy-admin.tsx');
+  assert.match(page, /<button type="button" onClick=\{\(\) => openCampaign\(c\)\} className="text-left min-w-0/, 'clicking a campaign opens it');
+  assert.match(page, /Details & members/);
+  assert.match(page, /Couldn’t open “\$\{c\.candidateName \|\| c\.name\}”: \$\{\(e as Error\)\.message\}/, 'the real reason is shown');
   assert.match(page, /setOpen\(campaign\.id\); setJustCreated\(campaign\.id\);/);
-  assert.match(page, /scrollIntoView/);
-  assert.match(page, /Add members below so they can sign in and open it\./);
   assert.match(page, /<h3 className="font-semibold text-sm pt-2">Add members<\/h3>/);
-  assert.match(page, /switchCampaign\(c\.id, "my-area"\)/);
-  for (const field of ['Candidate', 'Political party', 'Seat', 'Area', 'Election date', 'Wards']) assert.ok(page.includes(`["${field}",`), field);
+  assert.match(src('artifacts/commandcentre/src/lib/tenancy.ts'), /api\(`tenancy\/campaigns\/\$\{campaignId\}\/open`, \{ method: "POST"/);
+  const server = src('artifacts/api-server/src/routes/tenancy.ts');
+  assert.match(server, /router\.post\("\/campaigns\/:id\/open"/);
+  assert.match(server, /if \(!hadAny && id !== PRIMARY_CAMPAIGN_ID\)/, 'first membership keeps primary access');
+  assert.match(server, /req\.session\.activeCampaignId = id;/);
+  for (const field of ['Candidate', 'Affiliated party', 'Seat', 'Area', 'Election date', 'Wards']) assert.ok(page.includes(`["${field}",`), field);
 });
 
 test('campaigns are shown by candidate, never by member count', () => {

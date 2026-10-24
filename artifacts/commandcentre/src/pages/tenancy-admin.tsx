@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Plus, UserPlus, X, ShieldOff, MapPin } from "lucide-react";
 import { api, humanize } from "@/lib/records";
-import { switchCampaign } from "@/lib/tenancy";
+import { openCampaign as openCampaignApi } from "@/lib/tenancy";
 
 type Org = { id: number; name: string; campaignCount: number };
 type Camp = { id: number; organisationId: number; organisationName: string; name: string; seat: string | null; area: string | null; electionDate: string | null; status: string; memberCount: number;
@@ -50,11 +50,19 @@ function SeatPicker({ geo, v, set, optional }: { geo: Geo | undefined; v: { seat
   </div>;
 }
 
-function ProfileFields({ v, set, derived, parties = [] }: { v: Profile; set: (p: Profile) => void; derived?: boolean; parties?: string[] }) {
+/** Candidate name and affiliated party (typed freely; empty = Independent), with suggestions from parties already used. */
+function CandidateFields({ v, set, parties, required }: { v: Profile; set: (p: Profile) => void; parties: string[]; required?: boolean }) {
   return <div className="grid sm:grid-cols-2 gap-2">
-    <label className="text-sm">Candidate name<input value={v.candidateName} onChange={e => set({ ...v, candidateName: e.target.value })} className={inputCls} /></label>
-    <label className="text-sm">Political party<input value={v.party} maxLength={160} list="party-suggestions" onChange={e => set({ ...v, party: e.target.value })} className={inputCls} placeholder="e.g. UDA or ODM; leave empty if Independent" />
+    <label className="text-sm">Candidate name<input required={required} minLength={2} maxLength={120} value={v.candidateName} onChange={e => set({ ...v, candidateName: e.target.value })} className={inputCls} placeholder="e.g. Emmanuel Okatch" /></label>
+    <label className="text-sm">Affiliated party<input value={v.party} maxLength={160} list="party-suggestions" onChange={e => set({ ...v, party: e.target.value })} className={inputCls} placeholder="Type a party, or leave empty if Independent" />
       <datalist id="party-suggestions">{parties.map(p => <option key={p} value={p} />)}</datalist></label>
+  </div>;
+}
+
+function ProfileFields({ v, set, derived, parties = [], identity = true }: { v: Profile; set: (p: Profile) => void; derived?: boolean; parties?: string[]; identity?: boolean }) {
+  return <div className="space-y-2">
+    {identity && <CandidateFields v={v} set={set} parties={parties} />}
+    <div className="grid sm:grid-cols-2 gap-2">
     {!derived && <><label className="text-sm">Constituency / area<input required minLength={2} value={v.constituency} onChange={e => set({ ...v, constituency: e.target.value })} className={inputCls} placeholder="e.g. Mbooni" /></label>
     <label className="text-sm">County<input value={v.county} onChange={e => set({ ...v, county: e.target.value })} className={inputCls} placeholder="e.g. Makueni" /></label>
     <label className="text-sm sm:col-span-2">Wards <span className="text-xs text-muted-foreground">(comma-separated, as listed by IEBC)</span>
@@ -62,6 +70,7 @@ function ProfileFields({ v, set, derived, parties = [] }: { v: Profile; set: (p:
     <label className="text-sm sm:col-span-2">Profile & priorities for AI features
       <textarea rows={3} maxLength={4000} value={v.profileSummary} onChange={e => set({ ...v, profileSummary: e.target.value })} className={inputCls}
         placeholder="Who the candidate is, verified background, key local issues and pledges. The AI tools use this instead of generic text." /></label>
+    </div>
   </div>;
 }
 const profilePayload = (v: Profile, derived = false) => ({ ...(derived ? {} : { constituency: v.constituency || null, county: v.county || null, wards: parseWards(v.wards) }),
@@ -98,10 +107,15 @@ export default function TenancyAdmin() {
   const PRIMARY_ORG_ID = 1;
   const parties = [...new Map((orgs.data ?? []).filter(o => o.id !== PRIMARY_ORG_ID).map(o => [o.name.trim().toLowerCase(), o.name.trim()])).values()];
   const partyName = np.party.trim() || "Independent";
+  const SHORT_SEAT: Record<string, string> = { President: "President", Governor: "Governor", Senator: "Senator", "Woman Rep": "Woman Rep", MP: "MP", MCA: "MCA" };
+  const areaTitle = area.seat === "President" ? "Kenya" : area.seat === "MCA" ? (area.ward ? `${area.ward} Ward` : "")
+    : area.seat === "MP" ? area.constituency : area.county ? `${area.county} County` : "";
+  const campaignName = [np.candidateName.trim(), [SHORT_SEAT[area.seat] ?? area.seat, areaTitle].filter(Boolean).join(", ")].filter(Boolean).join(" — ").slice(0, 160);
   const createCamp = (e: FormEvent) => {
     e.preventDefault();
-    if (partyName.length < 2) { setErr("Enter the political party (at least 2 characters), or leave it empty for an Independent candidate."); return; }
-    const who = np.candidateName.trim() || nc.name.trim();
+    if (partyName.length < 2) { setErr("Enter the affiliated party (at least 2 characters), or leave it empty for an Independent candidate."); return; }
+    const who = np.candidateName.trim();
+    if (who.length < 2) { setErr("Enter the candidate’s name."); return; }
     void run(async () => {
       let party = orgs.data?.find(o => o.id !== PRIMARY_ORG_ID && o.name.trim().toLowerCase() === partyName.toLowerCase());
       if (!party) {
@@ -111,7 +125,7 @@ export default function TenancyAdmin() {
         qc.setQueryData<Org[]>(["t-orgs"], old => [...(old ?? []), saved]);
       }
       const campaign = await api<{ id: number; name: string }>("tenancy/campaigns", { method: "POST", body: JSON.stringify({
-        organisationId: party.id, name: nc.name, electionDate: nc.electionDate || null,
+        organisationId: party.id, name: campaignName, electionDate: nc.electionDate || null,
         seat: area.seat, areaCounty: area.county || null, areaConstituency: area.constituency || null, areaWard: area.ward || null,
         ...profilePayload({ ...np, party: party.name }, true), // the party's existing spelling
       }) });
@@ -120,10 +134,11 @@ export default function TenancyAdmin() {
       // Show the new campaign, filled in, with "Add members" ready.
       setEdit(null); setOpen(campaign.id); setJustCreated(campaign.id);
       window.setTimeout(() => document.getElementById(`campaign-${campaign.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 400);
-    }, `Campaign created for ${who}. Add members below so they can sign in and open it.`);
+    }, `Campaign created for ${who}. Click it to open its area, or add members below so they can sign in to it.`);
   };
-  const openCampaign = (c: Camp) => void switchCampaign(c.id, "my-area").catch(() =>
-    setErr(`You aren’t a member of “${c.name}”, so it can’t be opened yet. Add yourself under Add members, then try again.`));
+  // Opens the campaign on its seat's area. Shows the server's own reason if it can't.
+  const openCampaign = (c: Camp) => { setErr(""); setMsg(`Opening ${c.candidateName || c.name}…`);
+    void openCampaignApi(c.id).catch(e => { setMsg(""); setErr(`Couldn’t open “${c.candidateName || c.name}”: ${(e as Error).message}`); }); };
   const setStatus = (c: Camp, status: string) => run(() => api(`tenancy/campaigns/${c.id}`, { method: "PATCH", body: JSON.stringify({ status }) }), `${c.name} is now ${status}.`);
   const add = (c: Camp) => addUser && run(() => api(`tenancy/campaigns/${c.id}/members`, { method: "POST", body: JSON.stringify({ userId: Number(addUser) }) }).then(() => setAddUser("")), "Member added.");
   const remove = (c: Camp, u: U) => run(() => api(`tenancy/campaigns/${c.id}/members/${u.id}`, { method: "DELETE" }), `${u.name} removed from ${c.name}.`);
@@ -134,7 +149,7 @@ export default function TenancyAdmin() {
 
   return <div className="space-y-6 min-w-0">
     <header><h1 className="text-2xl font-bold flex items-center gap-2"><Building2 className="text-primary" size={24} /> Campaigns</h1>
-      <p className="text-sm text-muted-foreground max-w-3xl">Each campaign keeps its own records. People only see campaigns they’re members of; anyone with no memberships works in the primary campaign. Super-admins can open every campaign.</p></header>
+      <p className="text-sm text-muted-foreground max-w-3xl">One campaign per candidate. Click a campaign to open it: every module then shows that candidate’s seat and area. Each campaign keeps its own records, and people only see campaigns they’re members of.</p></header>
     {loadError && <div role="alert" className="border border-red-500/40 rounded-xl p-3 text-sm space-y-2">
       <p>Could not load campaign setup: {(loadError as Error).message}</p>
       <button type="button" onClick={() => { void orgs.refetch(); void camps.refetch(); void users.refetch(); void geo.refetch(); }} className={primary}>Retry loading</button>
@@ -145,12 +160,12 @@ export default function TenancyAdmin() {
     <div>
       <form onSubmit={createCamp} className="kaiti-glass rounded-2xl p-4 space-y-3">
         <h2 className="font-semibold">New campaign</h2>
+        <CandidateFields v={np} set={setNp} parties={parties} required />
         <div className="grid sm:grid-cols-2 gap-2">
-          <label className="text-sm">Campaign name<input required minLength={2} value={nc.name} onChange={e => setNc({ ...nc, name: e.target.value })} className={inputCls} /></label>
           <label className="text-sm">Election date<input type="date" value={nc.electionDate} onChange={e => setNc({ ...nc, electionDate: e.target.value })} className={inputCls} /></label>
         </div>
         <SeatPicker geo={geo.data} v={area} set={setArea} />
-        <ProfileFields v={np} set={setNp} derived parties={parties} />
+        <ProfileFields v={np} set={setNp} derived identity={false} />
         <button type="submit" disabled={saving || orgs.isPending || !!orgs.error} className={primary}><Plus size={16} /> {saving ? "Saving…" : "Create campaign"}</button>
       </form>
     </div>
@@ -159,16 +174,19 @@ export default function TenancyAdmin() {
       <h2 className="font-semibold mb-3">Campaigns</h2>
       <ul className="divide-y divide-border/60">{camps.data?.map(c => { const members = users.data?.filter(u => u.campaignIds.includes(c.id)) ?? []; return <li key={c.id} id={`campaign-${c.id}`} className={`py-3 scroll-mt-24 ${justCreated === c.id ? "rounded-xl px-3 border border-primary/60 bg-primary/5" : ""}`}>
         <div className="flex flex-wrap justify-between gap-2 items-center">
-          <button type="button" onClick={() => { setOpen(open === c.id ? null : c.id); setEdit(null); }} className="text-left min-w-0" aria-expanded={open === c.id}>
+          <button type="button" onClick={() => openCampaign(c)} className="text-left min-w-0 hover:text-primary" title="Open this campaign's area">
             <span className="font-medium block">{c.candidateName || c.name}{c.id === 1 && <span className="text-xs text-primary ml-2">primary</span>}{justCreated === c.id && <span className="text-xs text-primary ml-2">new</span>}</span>
             <span className="text-xs text-muted-foreground">{[c.candidateName ? c.name : null, c.party, c.seat, c.area, c.electionDate ? `election ${c.electionDate}` : null].filter(Boolean).join(" · ") || "Seat and area not set"}</span>
           </button>
+          <div className="flex gap-2 items-center">
+          <button type="button" onClick={() => { setOpen(open === c.id ? null : c.id); setEdit(null); }} aria-expanded={open === c.id} className="text-xs border border-border rounded-lg px-2 py-1.5">{open === c.id ? "Hide details" : "Details & members"}</button>
           <select aria-label={`Status of ${c.name}`} value={c.status} onChange={e => void setStatus(c, e.target.value)} className="bg-background border border-border rounded-lg p-1.5 text-sm">
             {["active", "paused", ...(c.id === 1 ? [] : ["archived"])].map(s => <option key={s} value={s}>{humanize(s)}</option>)}</select>
+          </div>
         </div>
         {open === c.id && <div className="mt-3 pl-3 border-l-2 border-primary/50 space-y-2">
           <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
-            {([["Candidate", c.candidateName], ["Political party", c.party], ["Seat", c.seat], ["Area", c.area ?? c.constituency], ["Election date", c.electionDate],
+            {([["Candidate", c.candidateName], ["Affiliated party", c.party], ["Seat", c.seat], ["Area", c.area ?? c.constituency], ["Election date", c.electionDate],
               ["Wards", c.wards.length ? `${c.wards.length}: ${c.wards.join(", ")}` : null]] as [string, string | null][]).map(([k, v]) =>
               <div key={k} className={k === "Wards" ? "sm:col-span-2" : ""}><dt className="text-xs text-muted-foreground inline">{k}: </dt><dd className="inline">{v || <span className="text-muted-foreground">not set</span>}</dd></div>)}
             {c.profileSummary && <div className="sm:col-span-2"><dt className="text-xs text-muted-foreground">Profile</dt><dd className="whitespace-pre-line">{c.profileSummary}</dd></div>}
