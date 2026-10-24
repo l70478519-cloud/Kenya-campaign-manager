@@ -32,6 +32,12 @@ export async function switchCampaign(campaignId: number, page = "dashboard") {
   window.location.assign(`${import.meta.env.BASE_URL}${page}`);
 }
 
+/** Administrators: open any campaign (added as a member if needed) and show its area. Errors carry the server's reason. */
+export async function openCampaign(campaignId: number, page = "my-area") {
+  await api(`tenancy/campaigns/${campaignId}/open`, { method: "POST", body: "{}" });
+  window.location.assign(`${import.meta.env.BASE_URL}${page}`);
+}
+
 /** True when an older module must be hidden in the active campaign. */
 export function legacyHidden(t: TenancyContext | undefined): boolean {
   return !!t && !t.allModulesIsolated && t.activeCampaignId !== t.primaryCampaignId;
