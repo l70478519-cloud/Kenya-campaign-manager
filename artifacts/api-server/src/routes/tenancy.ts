@@ -5,6 +5,8 @@ import { sql } from "drizzle-orm";
 import { campaignsForUser, invalidateTenancyCache, isSuperAdmin, PRIMARY_CAMPAIGN_ID } from "../lib/tenancy";
 import { tenantEnforcementActive, runAsSystem } from "@workspace/db";
 import { isolationStatus } from "../lib/tenant-isolation";
+import { deleteCampaignsTx, removeEmptyPartiesTx } from "../lib/campaign-delete";
+import { demoAspirantsStatus, endDemoAspirants, restartDemoAspirants } from "../lib/demo-aspirants";
 import { KENYA_COUNTIES, KENYA_SEATS, KENYA_TOTALS, SEAT_KEYS, unitsForSeat } from "../data/kenya-electoral-units";
 
 /**
@@ -48,6 +50,33 @@ router.get("/isolation", (_req, res) => { res.json(isolationStatus()); });
 /** Kenya's six elective seats and the full county → constituency → ward tree. */
 router.get("/geography", (_req, res) => {
   res.json({ seats: KENYA_SEATS, totals: KENYA_TOTALS, counties: KENYA_COUNTIES });
+});
+
+// ── Demo aspirants (DEMO_ASPIRANTS_PASSWORD) ─────────────────────────────────
+router.get("/demo", async (_req, res) => { res.json(await demoAspirantsStatus()); });
+
+/** Ends the demo: deletes demo campaigns, their data and the demo sign-ins; a restart won't recreate them. */
+router.post("/demo/end", async (req, res) => {
+  try {
+    const r = await endDemoAspirants(actor(req));
+    invalidateTenancyCache();
+    await log(actor(req), "Ended demo aspirants", `${r.campaigns} campaigns, ${r.accounts} sign-ins, ${r.records} records deleted`);
+    res.json({ ok: true, ...r });
+  } catch (err) {
+    req.log?.error({ err }, "Ending the demo failed");
+    res.status(409).json({ error: `The demo could not be ended, and nothing was removed: ${(err as Error).message}` });
+  }
+});
+
+/** Creates the demo again now. Needs DEMO_ASPIRANTS_PASSWORD (16+ characters) on the server. */
+router.post("/demo/start", async (req, res) => {
+  if ((process.env.DEMO_ASPIRANTS_PASSWORD ?? "").length < 16) {
+    res.status(400).json({ error: "Set DEMO_ASPIRANTS_PASSWORD (16+ characters) in the hosting environment and restart before starting the demo." }); return;
+  }
+  const status = await restartDemoAspirants(actor(req));
+  invalidateTenancyCache();
+  await log(actor(req), "Started demo aspirants", status.accounts.join(", "));
+  res.json(status);
 });
 
 router.get("/organisations", async (_req, res) => {
@@ -156,27 +185,11 @@ router.delete("/campaigns/:id", async (req, res) => {
   if (typeof req.body?.confirmName !== "string" || req.body.confirmName.trim() !== c.name.trim()) {
     res.status(400).json({ error: `Type the campaign name exactly (“${c.name}”) to delete it.` }); return;
   }
-  const tables = ((await db.execute(sql`SELECT table_name AS t FROM information_schema.columns
-    WHERE table_schema = 'public' AND column_name = 'owner_campaign_id'`)).rows as { t: string }[]).map(r => r.t);
-  const fks = (await db.execute(sql`SELECT conrelid::regclass::text AS child, confrelid::regclass::text AS parent FROM pg_constraint
-    WHERE contype = 'f' AND connamespace = 'public'::regnamespace`)).rows as { child: string; parent: string }[];
-  const bare = (n: string) => n.replace(/^public\./, "").replace(/"/g, "");
-  // Children first: a table is deleted once every table that references it has been.
-  const order: string[] = [], left = new Set(tables);
-  while (left.size) {
-    const ready = [...left].filter(t => !fks.some(f => bare(f.parent) === t && bare(f.child) !== t && left.has(bare(f.child))));
-    for (const t of ready.length ? ready : [...left]) { order.push(t); left.delete(t); }
-  }
   let removed = 0;
   try {
     await db.transaction(async tx => {
-      for (const t of order) {
-        const r = await tx.execute(sql.raw(`DELETE FROM public."${t.replace(/"/g, '""')}" WHERE owner_campaign_id = ${id}`));
-        removed += r.rowCount ?? 0;
-      }
-      await tx.execute(sql`DELETE FROM public.kaiti_campaigns WHERE id = ${id}`);
-      await tx.execute(sql`DELETE FROM public.kaiti_organisations o WHERE o.id <> 1
-        AND NOT EXISTS (SELECT 1 FROM public.kaiti_campaigns c WHERE c.organisation_id = o.id)`);
+      removed = await deleteCampaignsTx(tx, [id]);
+      await removeEmptyPartiesTx(tx);
     });
   } catch (err) {
     req.log?.error({ err, campaign: id }, "Campaign delete failed");

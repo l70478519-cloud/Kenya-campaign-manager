@@ -75,6 +75,7 @@ function ProfileFields({ v, set, derived, parties = [], identity = true }: { v: 
 }
 const profilePayload = (v: Profile, derived = false) => ({ ...(derived ? {} : { constituency: v.constituency || null, county: v.county || null, wards: parseWards(v.wards) }),
   candidateName: v.candidateName || null, party: v.party || null, profileSummary: v.profileSummary || null });
+type DemoStatus = { configured: boolean; ended: boolean; accounts: string[]; campaigns: { id: number; name: string }[] };
 type U = { id: number; name: string; email: string; role: string; status: string; mfaEnabled: boolean; campaignIds: number[] };
 
 const inputCls = "block w-full bg-background border border-border rounded-lg p-2.5 text-sm";
@@ -85,6 +86,7 @@ export default function TenancyAdmin() {
   const orgs = useQuery<Org[]>({ queryKey: ["t-orgs"], queryFn: () => api("tenancy/organisations") });
   const camps = useQuery<Camp[]>({ queryKey: ["t-camps"], queryFn: () => api("tenancy/campaigns") });
   const users = useQuery<U[]>({ queryKey: ["t-users"], queryFn: () => api("tenancy/users") });
+  const demo = useQuery<DemoStatus>({ queryKey: ["t-demo"], queryFn: () => api("tenancy/demo") });
   const [err, setErr] = useState(""); const [msg, setMsg] = useState("");
   const [nc, setNc] = useState({ organisationId: "", name: "", seat: "", area: "", electionDate: "" });
   const [np, setNp] = useState<Profile>(toProfile());
@@ -97,7 +99,7 @@ export default function TenancyAdmin() {
   const [saving, setSaving] = useState(false);
   const [justCreated, setJustCreated] = useState<number | null>(null);
   const loadError = orgs.error || camps.error || users.error || geo.error;
-  const reload = () => { void qc.invalidateQueries({ queryKey: ["t-orgs"] }); void qc.invalidateQueries({ queryKey: ["t-camps"] }); void qc.invalidateQueries({ queryKey: ["t-users"] }); void qc.invalidateQueries({ queryKey: ["tenancy-context"] }); };
+  const reload = () => { void qc.invalidateQueries({ queryKey: ["t-orgs"] }); void qc.invalidateQueries({ queryKey: ["t-camps"] }); void qc.invalidateQueries({ queryKey: ["t-users"] }); void qc.invalidateQueries({ queryKey: ["tenancy-context"] }); void qc.invalidateQueries({ queryKey: ["t-demo"] }); };
   async function run(fn: () => Promise<unknown>, ok: string) {
     setErr(""); setMsg(""); setSaving(true);
     try { await fn(); setMsg(ok); reload(); } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
@@ -150,6 +152,17 @@ export default function TenancyAdmin() {
     void run(() => api<{ removed: number }>(`tenancy/campaigns/${c.id}`, { method: "DELETE", body: JSON.stringify({ confirmName: typed }) })
       .then(() => { setOpen(null); setJustCreated(null); }), `“${c.name}” was deleted.`);
   };
+  const endDemo = () => {
+    const typed = window.prompt("End the demo? This permanently deletes the demo sign-ins (" + (demo.data?.accounts.join(", ") || "none") + "), their campaigns and everything recorded in them. They won't come back when the server restarts.\n\nType END DEMO to confirm:");
+    if (typed === null) return;
+    if (typed.trim().toUpperCase() !== "END DEMO") { setErr("Type END DEMO exactly to end the demo."); return; }
+    let summary = "";
+    void run(async () => {
+      const r = await api<{ campaigns: number; accounts: number; records: number }>("tenancy/demo/end", { method: "POST", body: "{}" });
+      summary = `Demo ended: ${r.accounts} sign-ins, ${r.campaigns} campaigns and ${r.records} records deleted.`;
+    }, "Demo ended.").then(() => { if (summary) setMsg(summary); });
+  };
+  const startDemo = () => void run(() => api("tenancy/demo/start", { method: "POST", body: "{}" }), "Demo started again: demo.mca, demo.mp and demo.governor can sign in.");
   const setStatus = (c: Camp, status: string) => run(() => api(`tenancy/campaigns/${c.id}`, { method: "PATCH", body: JSON.stringify({ status }) }), `${c.name} is now ${status}.`);
   const add = (c: Camp) => addUser && run(() => api(`tenancy/campaigns/${c.id}/members`, { method: "POST", body: JSON.stringify({ userId: Number(addUser) }) }).then(() => setAddUser("")), "Member added.");
   const remove = (c: Camp, u: U) => run(() => api(`tenancy/campaigns/${c.id}/members/${u.id}`, { method: "DELETE" }), `${u.name} removed from ${c.name}.`);
@@ -181,6 +194,21 @@ export default function TenancyAdmin() {
         <button type="submit" disabled={saving || orgs.isPending || !!orgs.error} className={primary}><Plus size={16} /> {saving ? "Registering…" : "Register aspirant"}</button>
       </form>
     </div>
+
+    {demo.data && (demo.data.accounts.length > 0 || demo.data.campaigns.length > 0 || demo.data.configured) && <section className="kaiti-glass rounded-2xl p-4 space-y-2 border border-amber-500/40">
+      <h2 className="font-semibold">Demo aspirants</h2>
+      {demo.data.accounts.length > 0 || demo.data.campaigns.length > 0 ? <>
+        <p className="text-sm">Demo sign-ins: {demo.data.accounts.join(", ") || "none"} · campaigns: {demo.data.campaigns.map(c => c.name).join("; ") || "none"}</p>
+        <p className="text-xs text-muted-foreground">When the demo is over, end it: the demo sign-ins, their campaigns and everything recorded in them are deleted and are not re-created when the server restarts.</p>
+        <button type="button" disabled={saving} onClick={endDemo} className="text-sm border border-red-500/50 text-red-300 rounded-xl px-3 py-2 inline-flex gap-2 items-center"><Trash2 size={16} /> End demo and delete demo data</button>
+      </> : <>
+        <p className="text-sm">{demo.data.ended ? "The demo has ended; its sign-ins and data are deleted." : "No demo sign-ins exist."}</p>
+        {demo.data.configured
+          ? <><button type="button" disabled={saving} onClick={startDemo} className={primary}><Plus size={16} /> Start demo again</button>
+            <p className="text-xs text-muted-foreground">DEMO_ASPIRANTS_PASSWORD is still set on the server. Remove it in Render when you no longer need demos.</p></>
+          : <p className="text-xs text-muted-foreground">To run a demo again, set DEMO_ASPIRANTS_PASSWORD (16+ characters) in Render and restart.</p>}
+      </>}
+    </section>}
 
     <section className="kaiti-glass rounded-2xl p-4">
       <h2 className="font-semibold mb-3">Campaigns</h2>

@@ -47,8 +47,8 @@ test('test campaigns can be deleted permanently, all or nothing, never the prima
   assert.match(server, /router\.delete\("\/campaigns\/:id"/);
   assert.match(server, /id === PRIMARY_CAMPAIGN_ID\) \{ res\.status\(400\)/);
   assert.match(server, /req\.body\.confirmName\.trim\(\) !== c\.name\.trim\(\)/, 'exact name required');
-  assert.match(server, /await db\.transaction\(async tx =>/);
-  assert.match(server, /WHERE owner_campaign_id = \$\{id\}/);
+  assert.match(server, /await db\.transaction\(async tx => \{\n      removed = await deleteCampaignsTx\(tx, \[id\]\);/);
+  assert.match(src('artifacts/api-server/src/lib/campaign-delete.ts'), /WHERE owner_campaign_id IN \(\$\{list\}\)/);
   const page = src('artifacts/commandcentre/src/pages/tenancy-admin.tsx');
   assert.match(page, /\{c\.id !== 1 && <button type="button" onClick=\{\(\) => deleteCampaign\(c\)\}/);
 });
@@ -73,4 +73,22 @@ test('My Area is a dashboard-level page backed by the campaign-scoped area API',
   assert.match(layout, /"\/my-area": "dashboard"/);
   assert.match(src('artifacts/commandcentre/src/pages/my-area.tsx'), /api<Area>\("geography\/my-area"\)/);
   assert.match(src('artifacts/commandcentre/src/lib/tenancy.ts'), /export async function switchCampaign\(campaignId: number, page = "dashboard"\)/);
+});
+
+test('the demo can be ended: campaigns, data, sign-ins and sessions deleted, and it stays ended after restarts', () => {
+  const demo = src('artifacts/api-server/src/lib/demo-aspirants.ts');
+  assert.match(demo, /export async function endDemoAspirants/);
+  assert.match(demo, /records = await deleteCampaignsTx\(tx, ids\);/);
+  assert.match(demo, /DELETE FROM user_sessions WHERE sess->>'userId' = \$\{String\(u\.id\)\}/, 'signs demo users out');
+  assert.match(demo, /DELETE FROM public\.kaiti_user_mfa WHERE user_id = \$\{u\.id\}/);
+  assert.match(demo, /DELETE FROM admin_users WHERE notes = \$\{DEMO_NOTE\}/, 'only accounts the demo created');
+  assert.match(demo, /if \(await demoEnded\(\)\) \{ logger\.info\("Demo aspirants were ended/, 'not re-created at restart');
+  assert.match(demo, /await setDemoEnded\(false, by\);\n  await ensureDemoAspirants\(\);/, 'can be started again');
+  const routes = src('artifacts/api-server/src/routes/tenancy.ts');
+  for (const r of ['router.get("/demo"', 'router.post("/demo/end"', 'router.post("/demo/start"']) assert.ok(routes.includes(r), r);
+  assert.match(src('artifacts/api-server/src/lib/campaign-delete.ts'), /const safe = ids\.filter\(id => Number\.isInteger\(id\) && id !== 1\);/, 'never the primary campaign');
+  const page = src('artifacts/commandcentre/src/pages/tenancy-admin.tsx');
+  assert.match(page, /End demo and delete demo data/);
+  assert.match(page, /typed\.trim\(\)\.toUpperCase\(\) !== "END DEMO"/);
+  assert.match(page, /Start demo again/);
 });
