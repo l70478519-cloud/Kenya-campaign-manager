@@ -9,7 +9,7 @@ window.SITE_CONFIG = {
   company: "",                 // e.g. "Your Company Ltd"
   phone: "",                   // e.g. "+254 7XX XXX XXX"
   whatsapp: "",                // digits only, e.g. "2547XXXXXXXX"
-  email: "",                   // e.g. "hello@yourdomain.co.ke"
+  email: "info@aclss.co.ke",   // e.g. "hello@yourdomain.co.ke"
   address: "",                 // e.g. "Nairobi, Kenya"
   appUrl: "/login",            // where "Log in" goes
   apiBase: "",                 // "" when served by the Command Centre server; otherwise e.g. "https://app.yourdomain.co.ke"
