@@ -42,6 +42,7 @@ import FeatureCatalogue from "@/pages/feature-catalogue";
 import Security from "@/pages/security";
 import { ChangePasswordForm } from "@/components/account-settings";
 import TenancyAdmin from "@/pages/tenancy-admin";
+import MyArea from "@/pages/my-area";
 import { useTenancy, LEGACY_HREFS, legacyHidden } from "@/lib/tenancy";
 import { applyCampaignGeography } from "@/lib/wards";
 import { Layout } from "@/components/layout";
@@ -142,6 +143,7 @@ function ProtectedRoutes() {
         <Route path="/wa-templates">{() => <Guarded module="messaging" component={WaTemplates} />}</Route>
         <Route path="/content-studio">{() => <Guarded module="messaging" component={() => <ModuleRecords moduleKey="content-calendar" />} />}</Route>
         <Route path="/dashboard">{() => <Guarded module="dashboard" component={Dashboard} />}</Route>
+        <Route path="/my-area">{() => <Guarded module="dashboard" component={MyArea} />}</Route>
         <Route path="/strategist">{() => <Guarded module="dashboard" component={Strategist} />}</Route>
         <Route path="/members">{() => <Guarded module="voters" component={Members} />}</Route>
         <Route path="/segments">{() => <Guarded module="segmentation" component={Segments} />}</Route>

@@ -26,6 +26,7 @@ import {
   ShieldAlert,
   Target,
   LayoutDashboard,
+  MapPin,
   LogOut,
   Banknote,
   Vote,
@@ -47,6 +48,7 @@ const navGroups: { title: string; items: NavItem[] }[] = [
     title: "Mission Control",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/my-area", label: "My Area", icon: MapPin },
       { href: "/members", label: "Members", icon: Users },
       { href: "/segments", label: "Segments", icon: PieChart },
       {
@@ -110,6 +112,7 @@ const navGroups: { title: string; items: NavItem[] }[] = [
 // Maps a nav href to its backend permission module key (see admin MODULES list).
 const NAV_PERM: Record<string, string> = {
   "/dashboard": "dashboard",
+  "/my-area": "dashboard",
   "/deepfake": "intelligence",
   "/wa-templates": "messaging",
   "/content-studio": "messaging",

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Plus, UserPlus, X, ShieldOff } from "lucide-react";
 import { api, humanize } from "@/lib/records";
+import { switchCampaign } from "@/lib/tenancy";
 
 type Org = { id: number; name: string; campaignCount: number };
 type Camp = { id: number; organisationId: number; organisationName: string; name: string; seat: string | null; area: string | null; electionDate: string | null; status: string; memberCount: number;
@@ -75,7 +76,6 @@ export default function TenancyAdmin() {
   const camps = useQuery<Camp[]>({ queryKey: ["t-camps"], queryFn: () => api("tenancy/campaigns") });
   const users = useQuery<U[]>({ queryKey: ["t-users"], queryFn: () => api("tenancy/users") });
   const [err, setErr] = useState(""); const [msg, setMsg] = useState("");
-  const [orgName, setOrgName] = useState("");
   const [organisationInput, setOrganisationInput] = useState("");
   const [nc, setNc] = useState({ organisationId: "", name: "", seat: "", area: "", electionDate: "" });
   const [np, setNp] = useState<Profile>(toProfile());
@@ -100,12 +100,6 @@ export default function TenancyAdmin() {
     try { await fn(); setMsg(ok); reload(); } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
   }
 
-  const createOrg = (e: FormEvent) => { e.preventDefault(); void run(() => api<Org>("tenancy/organisations", { method: "POST", body: JSON.stringify({ name: orgName }) }).then(created => {
-    qc.setQueryData<Org[]>(["t-orgs"], old => [...(old ?? []), { ...created, campaignCount: 0 }]);
-    setNc(v => ({ ...v, organisationId: String(created.id) }));
-    setOrganisationInput(created.name);
-    setOrgName("");
-  }), "Organisation created."); };
   const matchingOrganisation = orgs.data?.find(o => o.name.trim().toLowerCase() === organisationInput.trim().toLowerCase());
   const createCamp = (e: FormEvent) => {
     e.preventDefault();
@@ -123,14 +117,17 @@ export default function TenancyAdmin() {
         setNc(v => ({ ...v, organisationId: String(saved.id) }));
         setOrganisationInput(saved.name);
       }
-      await api("tenancy/campaigns", { method: "POST", body: JSON.stringify({
+      const campaign = await api<{ id: number; name: string }>("tenancy/campaigns", { method: "POST", body: JSON.stringify({
         organisationId: organisation.id, name: nc.name, electionDate: nc.electionDate || null,
         seat: area.seat, areaCounty: area.county || null, areaConstituency: area.constituency || null, areaWard: area.ward || null,
         ...profilePayload(np, true),
       }) });
       setNc({ organisationId: String(organisation.id), name: "", seat: "", area: "", electionDate: "" });
       setNp(toProfile()); setArea({ seat: "", county: "", constituency: "", ward: "" });
-    }, "Campaign created with its wards. Add members so people can open it.");
+      // Open the new campaign straight away and show its area. Only campaigns you can open can be switched to.
+      try { await switchCampaign(campaign.id, "my-area"); }
+      catch { throw new Error(`“${campaign.name}” was created, but you aren’t a member of it, so it can’t be opened yet. Add yourself under Campaigns below, then choose it in the campaign menu.`); }
+    }, "Campaign created. Opening its area…");
   };
   const setStatus = (c: Camp, status: string) => run(() => api(`tenancy/campaigns/${c.id}`, { method: "PATCH", body: JSON.stringify({ status }) }), `${c.name} is now ${status}.`);
   const add = (c: Camp) => addUser && run(() => api(`tenancy/campaigns/${c.id}/members`, { method: "POST", body: JSON.stringify({ userId: Number(addUser) }) }).then(() => setAddUser("")), "Member added.");
@@ -150,15 +147,7 @@ export default function TenancyAdmin() {
     {err && <p role="alert" className="border border-red-500/40 bg-red-950/30 rounded-xl p-3 text-red-200 text-sm">{err}</p>}
     {msg && <p role="status" className="border border-green-500/40 rounded-xl p-3 text-green-200 text-sm">{msg}</p>}
 
-    <div className="grid lg:grid-cols-2 gap-4">
-      <form onSubmit={createOrg} className="kaiti-glass rounded-2xl p-4 space-y-3">
-        <h2 className="font-semibold">Organisations</h2>
-        {orgs.isPending && <p role="status" className="text-sm text-muted-foreground">Loading organisations…</p>}
-        {!orgs.isPending && !orgs.error && !orgs.data?.length && <p className="text-sm text-muted-foreground">No organisations yet. Enter a name below and click Add.</p>}
-        <ul className="text-sm space-y-1">{orgs.data?.map(o => <li key={o.id} className="flex justify-between"><span>{o.name}</span><span className="text-muted-foreground">{o.campaignCount} campaign{o.campaignCount === 1 ? "" : "s"}</span></li>)}</ul>
-        <div className="flex gap-2"><input required minLength={2} value={orgName} onChange={e => setOrgName(e.target.value)} placeholder="New organisation, e.g. a party or agency" aria-label="Organisation name" className={inputCls} />
-          <button type="submit" disabled={saving} className={primary}><Plus size={16} /> Add</button></div>
-      </form>
+    <div>
       <form onSubmit={createCamp} className="kaiti-glass rounded-2xl p-4 space-y-3">
         <h2 className="font-semibold">New campaign</h2>
         <div className="grid sm:grid-cols-2 gap-2">
@@ -167,7 +156,7 @@ export default function TenancyAdmin() {
               disabled={orgs.isPending || !!orgs.error || saving} value={organisationInput}
               onChange={e => { setOrganisationInput(e.target.value); setNc(v => ({ ...v, organisationId: "" })); }}
               placeholder={orgs.isPending ? "Loading organisations…" : "Type or choose an organisation"} className={inputCls} />
-            <datalist id="campaign-organisations">{orgs.data?.map(o => <option key={o.id} value={o.name} />)}</datalist>
+            <datalist id="campaign-organisations">{[...new Map((orgs.data ?? []).map(o => [o.name.trim().toLowerCase(), o])).values()].map(o => <option key={o.id} value={o.name} />)}</datalist>
             <span className="block mt-1 text-xs text-muted-foreground">{matchingOrganisation ? "Existing organisation selected." : organisationInput.trim().length >= 2 ? "This organisation will be created when you save the campaign." : "Choose a suggestion or type a new organisation name."}</span>
           </label>
           <label className="text-sm">Campaign name<input required minLength={2} value={nc.name} onChange={e => setNc({ ...nc, name: e.target.value })} className={inputCls} /></label>
