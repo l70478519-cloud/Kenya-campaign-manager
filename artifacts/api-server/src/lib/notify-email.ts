@@ -17,7 +17,7 @@ export async function sendNotificationEmail(opts: {
   replyTo?: string;
 }): Promise<void> {
   const apiKey = process.env.BREVO_API_KEY;
-  if (!apiKey) return;
+  if (!apiKey) { logger.warn({ subject: opts.subject }, "BREVO_API_KEY not set: demo request saved but NOT emailed"); return; }
   const to = process.env.DEMO_NOTIFY_EMAIL || SYSTEM_EMAIL;
   const from = process.env.MAIL_FROM || SYSTEM_EMAIL;
   const filled = opts.rows.filter(([, v]) => v);
@@ -39,7 +39,8 @@ export async function sendNotificationEmail(opts: {
       }),
       signal: AbortSignal.timeout(10_000),
     });
-    if (!r.ok) logger.warn({ status: r.status, body: await r.text().catch(() => "") }, "Notification email failed");
+    if (r.ok) logger.info({ to, subject: opts.subject }, "Notification email sent");
+    else logger.warn({ status: r.status, body: await r.text().catch(() => "") }, "Notification email failed");
   } catch (err) {
     logger.warn({ err }, "Notification email failed");
   }

@@ -320,7 +320,15 @@ router.post("/:module/export", async (req, res) => {
   const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
   if (reason.length < 10) { res.status(400).json({ error: "State the reason for this export (at least 10 characters)." }); return; }
   const includeSensitive = req.body?.includeSensitive === true;
+  const isAdmin = (await permFor(req, "admin")) === "write";
+  if (includeSensitive && !isAdmin) {
+    res.status(403).json({ error: "Only a campaign administrator can export sensitive fields." }); return;
+  }
   const rows = (await db.execute(sql`SELECT ${SELECT} FROM public.kaiti_records WHERE owner_campaign_id = ${req.campaignId!} AND module=${mod.key} AND deleted_at IS NULL ORDER BY id`)).rows as Row[];
+  const maxRows = Number(process.env.EXPORT_MAX_ROWS) || 2000;
+  if (!isAdmin && rows.length > maxRows) {
+    res.status(403).json({ error: `This export has ${rows.length} rows. Exports over ${maxRows} rows need a campaign administrator.` }); return;
+  }
   const fields = mod.fields.filter(f => includeSensitive || !f.sensitive);
   const esc = (v: unknown) => {
     let s = v === null || v === undefined ? "" : String(v);
