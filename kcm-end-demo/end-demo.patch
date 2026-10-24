@@ -1,0 +1,359 @@
+From b6c5e8bb6fd627d27eb7013d2d04470c97f672ba Mon Sep 17 00:00:00 2001
+From: "Claude (for yrn-mwathi)" <noreply@anthropic.com>
+Date: Sat, 24 Oct 2026 01:30:15 +0000
+Subject: [PATCH] End the demo: delete demo sign-ins, campaigns and data in one
+ step; it stays ended
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Settings → Campaigns gets a "Demo aspirants" box: lists the demo sign-ins and
+  campaigns, "End demo and delete demo data" (type END DEMO), and "Start demo
+  again" once ended (needs DEMO_ASPIRANTS_PASSWORD).
+- POST /api/tenancy/demo/end (admin): in one transaction deletes the demo
+  campaigns and every record they own, the demo sign-ins (only accounts the
+  demo created), their 2FA records and open sessions, and the demo group; then
+  records demo.aspirants.ended so a restart doesn't re-create the demo even if
+  DEMO_ASPIRANTS_PASSWORD is still set. GET /tenancy/demo, POST /tenancy/demo/start.
+- Campaign deletion moved to lib/campaign-delete.ts and shared by "Delete
+  permanently" and "End demo" (children before parents, never the primary).
+
+Verified: 81/81 acceptance tests, typecheck + production build, and an end-to-
+end run with row-level security on shared tables: end demo removed 3 sign-ins,
+3 campaigns and 588 records with nothing left; the open demo session was signed
+out; a restart did not re-create it; "Start demo again" restored it; ordinary
+delete still works; candidate role gets 403.
+---
+ .../api-server/src/lib/campaign-delete.ts     | 47 +++++++++++++++
+ .../api-server/src/lib/demo-aspirants.ts      | 58 ++++++++++++++++++-
+ artifacts/api-server/src/routes/tenancy.ts    | 49 ++++++++++------
+ .../commandcentre/src/pages/tenancy-admin.tsx | 30 +++++++++-
+ tests/acceptance/campaign-setup-flow.test.mjs | 22 ++++++-
+ 5 files changed, 184 insertions(+), 22 deletions(-)
+ create mode 100644 artifacts/api-server/src/lib/campaign-delete.ts
+
+diff --git a/artifacts/api-server/src/lib/campaign-delete.ts b/artifacts/api-server/src/lib/campaign-delete.ts
+new file mode 100644
+index 0000000..13f4236
+--- /dev/null
++++ b/artifacts/api-server/src/lib/campaign-delete.ts
+@@ -0,0 +1,47 @@
++import { db } from "@workspace/db";
++import { sql } from "drizzle-orm";
++
++type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
++
++/**
++ * Tables holding per-campaign rows (owner_campaign_id), ordered children before
++ * parents using the database's live foreign keys, so deletes never trip a
++ * reference between campaign tables.
++ */
++async function campaignTablesInDeleteOrder(): Promise<string[]> {
++  const tables = ((await db.execute(sql`SELECT table_name AS t FROM information_schema.columns
++    WHERE table_schema = 'public' AND column_name = 'owner_campaign_id'`)).rows as { t: string }[]).map(r => r.t);
++  const fks = (await db.execute(sql`SELECT conrelid::regclass::text AS child, confrelid::regclass::text AS parent FROM pg_constraint
++    WHERE contype = 'f' AND connamespace = 'public'::regnamespace`)).rows as { child: string; parent: string }[];
++  const bare = (n: string) => n.replace(/^public\./, "").replace(/"/g, "");
++  const order: string[] = [], left = new Set(tables);
++  while (left.size) {
++    const ready = [...left].filter(t => !fks.some(f => bare(f.parent) === t && bare(f.child) !== t && left.has(bare(f.child))));
++    for (const t of ready.length ? ready : [...left]) { order.push(t); left.delete(t); }
++  }
++  return order;
++}
++
++/**
++ * Deletes campaigns and every row they own, inside the caller's transaction.
++ * Memberships go with the campaign (ON DELETE CASCADE). Never pass the primary
++ * campaign (1). Returns the number of campaign-owned rows removed.
++ */
++export async function deleteCampaignsTx(tx: Tx, ids: number[]): Promise<number> {
++  const safe = ids.filter(id => Number.isInteger(id) && id !== 1);
++  if (!safe.length) return 0;
++  const list = sql.join(safe.map(id => sql`${id}`), sql`, `);
++  let removed = 0;
++  for (const t of await campaignTablesInDeleteOrder()) {
++    const r = await tx.execute(sql`DELETE FROM ${sql.raw(`public."${t.replace(/"/g, '""')}"`)} WHERE owner_campaign_id IN (${list})`);
++    removed += r.rowCount ?? 0;
++  }
++  await tx.execute(sql`DELETE FROM public.kaiti_campaigns WHERE id IN (${list})`);
++  return removed;
++}
++
++/** Parties (organisations) left with no campaigns are removed; the primary organisation stays. */
++export async function removeEmptyPartiesTx(tx: Tx): Promise<void> {
++  await tx.execute(sql`DELETE FROM public.kaiti_organisations o WHERE o.id <> 1
++    AND NOT EXISTS (SELECT 1 FROM public.kaiti_campaigns c WHERE c.organisation_id = o.id)`);
++}
+diff --git a/artifacts/api-server/src/lib/demo-aspirants.ts b/artifacts/api-server/src/lib/demo-aspirants.ts
+index 53cd1ae..8c1cb6d 100644
+--- a/artifacts/api-server/src/lib/demo-aspirants.ts
++++ b/artifacts/api-server/src/lib/demo-aspirants.ts
+@@ -4,6 +4,7 @@ import { unitsForSeat } from "../data/kenya-electoral-units";
+ import { campaignArea, referenceStationRows } from "./polling-centres";
+ import { hashPassword } from "./auth";
+ import { logger } from "./logger";
++import { deleteCampaignsTx, removeEmptyPartiesTx } from "./campaign-delete";
+ 
+ /**
+  * Demo aspirants: one sign-in per seat level, each a member of its own
+@@ -13,10 +14,64 @@ import { logger } from "./logger";
+  * Off unless DEMO_ASPIRANTS_PASSWORD (16+ characters) is set in the hosting
+  * environment. No password is ever shipped in code. Safe to run on every start:
+  * existing campaigns, accounts and centres are reused. Remove the variable to
+- * stop seeding; delete the accounts in Admin to retire them.
++ * stop seeding. "End demo" (endDemoAspirants) deletes the demo campaigns, their
++ * data and the demo sign-ins, and records that the demo has ended so a restart
++ * does not bring it back; "Start demo again" (restartDemoAspirants) undoes that.
+  */
+ export const DEMO_ORGANISATION = "Demo aspirants";
+ const DEMO_NOTE = "Demo aspirant account (DEMO_ASPIRANTS_PASSWORD)";
++/** system_config key: "true" once an administrator has ended the demo. */
++export const DEMO_ENDED_KEY = "demo.aspirants.ended";
++
++async function demoEnded(): Promise<boolean> {
++  const r = (await db.execute(sql`SELECT value FROM system_config WHERE key = ${DEMO_ENDED_KEY} LIMIT 1`)).rows[0] as { value: string } | undefined;
++  return r?.value === "true";
++}
++async function setDemoEnded(ended: boolean, by: string): Promise<void> {
++  await db.execute(sql`INSERT INTO system_config (key, value, category, description, updated_by, updated_at)
++    VALUES (${DEMO_ENDED_KEY}, ${String(ended)}, 'demo', 'Demo aspirants ended by an administrator; not re-created at restart', ${by}, now())
++    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`);
++}
++
++export type DemoStatus = { configured: boolean; ended: boolean; accounts: string[]; campaigns: { id: number; name: string }[] };
++export async function demoAspirantsStatus(): Promise<DemoStatus> {
++  const accounts = ((await db.execute(sql`SELECT username FROM admin_users WHERE notes = ${DEMO_NOTE} ORDER BY username`)).rows as { username: string }[]).map(r => r.username);
++  const campaigns = (await db.execute(sql`SELECT c.id::int, c.name FROM public.kaiti_campaigns c JOIN public.kaiti_organisations o ON o.id = c.organisation_id
++    WHERE o.name = ${DEMO_ORGANISATION} ORDER BY c.id`)).rows as { id: number; name: string }[];
++  return { configured: (process.env.DEMO_ASPIRANTS_PASSWORD ?? "").length >= 16, ended: await demoEnded(), accounts, campaigns };
++}
++
++/**
++ * Ends the demo: deletes the demo campaigns and everything recorded in them, the
++ * demo sign-ins (with their 2FA records and open sessions) and the demo group,
++ * all in one transaction, then records that the demo has ended.
++ */
++export async function endDemoAspirants(by: string): Promise<{ campaigns: number; accounts: number; records: number }> {
++  const status = await demoAspirantsStatus();
++  const ids = status.campaigns.map(c => c.id);
++  let records = 0, accounts = 0;
++  await db.transaction(async tx => {
++    records = await deleteCampaignsTx(tx, ids);
++    const users = (await tx.execute(sql`SELECT id FROM admin_users WHERE notes = ${DEMO_NOTE}`)).rows as { id: number }[];
++    for (const u of users) {
++      await tx.execute(sql`DELETE FROM public.kaiti_campaign_members WHERE user_id = ${u.id}`);
++      await tx.execute(sql`DELETE FROM public.kaiti_user_mfa WHERE user_id = ${u.id}`);
++      await tx.execute(sql`DELETE FROM user_sessions WHERE sess->>'userId' = ${String(u.id)}`);
++    }
++    accounts = (await tx.execute(sql`DELETE FROM admin_users WHERE notes = ${DEMO_NOTE}`)).rowCount ?? 0;
++    await tx.execute(sql`DELETE FROM public.kaiti_organisations WHERE name = ${DEMO_ORGANISATION} AND id <> 1`);
++    await removeEmptyPartiesTx(tx);
++  });
++  await setDemoEnded(true, by);
++  return { campaigns: ids.length, accounts, records };
++}
++
++/** Clears the "ended" mark and creates the demo again now (needs DEMO_ASPIRANTS_PASSWORD). */
++export async function restartDemoAspirants(by: string): Promise<DemoStatus> {
++  await setDemoEnded(false, by);
++  await ensureDemoAspirants();
++  return demoAspirantsStatus();
++}
+ 
+ export const DEMO_ASPIRANTS = [
+   { username: "demo.mca", name: "Demo MCA Aspirant", seat: "MCA", county: "Makueni", constituency: "Kaiti", ward: "Ukia" },
+@@ -29,6 +84,7 @@ export async function ensureDemoAspirants(): Promise<void> {
+   if (!password) return;
+   if (password.length < 16) { logger.warn("DEMO_ASPIRANTS_PASSWORD must be at least 16 characters; demo aspirants not created"); return; }
+   try {
++    if (await demoEnded()) { logger.info("Demo aspirants were ended by an administrator; not re-created"); return; }
+     const org = (await db.execute(sql`SELECT id::int FROM public.kaiti_organisations WHERE name = ${DEMO_ORGANISATION} ORDER BY id LIMIT 1`)).rows[0] as { id: number } | undefined
+       ?? (await db.execute(sql`INSERT INTO public.kaiti_organisations (name) VALUES (${DEMO_ORGANISATION}) RETURNING id::int`)).rows[0] as { id: number };
+     const passwordHash = await hashPassword(password);
+diff --git a/artifacts/api-server/src/routes/tenancy.ts b/artifacts/api-server/src/routes/tenancy.ts
+index 189ae5e..5ec5a30 100644
+--- a/artifacts/api-server/src/routes/tenancy.ts
++++ b/artifacts/api-server/src/routes/tenancy.ts
+@@ -5,6 +5,8 @@ import { sql } from "drizzle-orm";
+ import { campaignsForUser, invalidateTenancyCache, isSuperAdmin, PRIMARY_CAMPAIGN_ID } from "../lib/tenancy";
+ import { tenantEnforcementActive, runAsSystem } from "@workspace/db";
+ import { isolationStatus } from "../lib/tenant-isolation";
++import { deleteCampaignsTx, removeEmptyPartiesTx } from "../lib/campaign-delete";
++import { demoAspirantsStatus, endDemoAspirants, restartDemoAspirants } from "../lib/demo-aspirants";
+ import { KENYA_COUNTIES, KENYA_SEATS, KENYA_TOTALS, SEAT_KEYS, unitsForSeat } from "../data/kenya-electoral-units";
+ 
+ /**
+@@ -50,6 +52,33 @@ router.get("/geography", (_req, res) => {
+   res.json({ seats: KENYA_SEATS, totals: KENYA_TOTALS, counties: KENYA_COUNTIES });
+ });
+ 
++// ── Demo aspirants (DEMO_ASPIRANTS_PASSWORD) ─────────────────────────────────
++router.get("/demo", async (_req, res) => { res.json(await demoAspirantsStatus()); });
++
++/** Ends the demo: deletes demo campaigns, their data and the demo sign-ins; a restart won't recreate them. */
++router.post("/demo/end", async (req, res) => {
++  try {
++    const r = await endDemoAspirants(actor(req));
++    invalidateTenancyCache();
++    await log(actor(req), "Ended demo aspirants", `${r.campaigns} campaigns, ${r.accounts} sign-ins, ${r.records} records deleted`);
++    res.json({ ok: true, ...r });
++  } catch (err) {
++    req.log?.error({ err }, "Ending the demo failed");
++    res.status(409).json({ error: `The demo could not be ended, and nothing was removed: ${(err as Error).message}` });
++  }
++});
++
++/** Creates the demo again now. Needs DEMO_ASPIRANTS_PASSWORD (16+ characters) on the server. */
++router.post("/demo/start", async (req, res) => {
++  if ((process.env.DEMO_ASPIRANTS_PASSWORD ?? "").length < 16) {
++    res.status(400).json({ error: "Set DEMO_ASPIRANTS_PASSWORD (16+ characters) in the hosting environment and restart before starting the demo." }); return;
++  }
++  const status = await restartDemoAspirants(actor(req));
++  invalidateTenancyCache();
++  await log(actor(req), "Started demo aspirants", status.accounts.join(", "));
++  res.json(status);
++});
++
+ router.get("/organisations", async (_req, res) => {
+   const r = await db.execute(sql`SELECT o.id::int, o.name, o.created_at AS "createdAt",
+     (SELECT count(*)::int FROM public.kaiti_campaigns c WHERE c.organisation_id = o.id) AS "campaignCount"
+@@ -156,27 +185,11 @@ router.delete("/campaigns/:id", async (req, res) => {
+   if (typeof req.body?.confirmName !== "string" || req.body.confirmName.trim() !== c.name.trim()) {
+     res.status(400).json({ error: `Type the campaign name exactly (“${c.name}”) to delete it.` }); return;
+   }
+-  const tables = ((await db.execute(sql`SELECT table_name AS t FROM information_schema.columns
+-    WHERE table_schema = 'public' AND column_name = 'owner_campaign_id'`)).rows as { t: string }[]).map(r => r.t);
+-  const fks = (await db.execute(sql`SELECT conrelid::regclass::text AS child, confrelid::regclass::text AS parent FROM pg_constraint
+-    WHERE contype = 'f' AND connamespace = 'public'::regnamespace`)).rows as { child: string; parent: string }[];
+-  const bare = (n: string) => n.replace(/^public\./, "").replace(/"/g, "");
+-  // Children first: a table is deleted once every table that references it has been.
+-  const order: string[] = [], left = new Set(tables);
+-  while (left.size) {
+-    const ready = [...left].filter(t => !fks.some(f => bare(f.parent) === t && bare(f.child) !== t && left.has(bare(f.child))));
+-    for (const t of ready.length ? ready : [...left]) { order.push(t); left.delete(t); }
+-  }
+   let removed = 0;
+   try {
+     await db.transaction(async tx => {
+-      for (const t of order) {
+-        const r = await tx.execute(sql.raw(`DELETE FROM public."${t.replace(/"/g, '""')}" WHERE owner_campaign_id = ${id}`));
+-        removed += r.rowCount ?? 0;
+-      }
+-      await tx.execute(sql`DELETE FROM public.kaiti_campaigns WHERE id = ${id}`);
+-      await tx.execute(sql`DELETE FROM public.kaiti_organisations o WHERE o.id <> 1
+-        AND NOT EXISTS (SELECT 1 FROM public.kaiti_campaigns c WHERE c.organisation_id = o.id)`);
++      removed = await deleteCampaignsTx(tx, [id]);
++      await removeEmptyPartiesTx(tx);
+     });
+   } catch (err) {
+     req.log?.error({ err, campaign: id }, "Campaign delete failed");
+diff --git a/artifacts/commandcentre/src/pages/tenancy-admin.tsx b/artifacts/commandcentre/src/pages/tenancy-admin.tsx
+index 4b13c17..1f3b713 100644
+--- a/artifacts/commandcentre/src/pages/tenancy-admin.tsx
++++ b/artifacts/commandcentre/src/pages/tenancy-admin.tsx
+@@ -75,6 +75,7 @@ function ProfileFields({ v, set, derived, parties = [], identity = true }: { v:
+ }
+ const profilePayload = (v: Profile, derived = false) => ({ ...(derived ? {} : { constituency: v.constituency || null, county: v.county || null, wards: parseWards(v.wards) }),
+   candidateName: v.candidateName || null, party: v.party || null, profileSummary: v.profileSummary || null });
++type DemoStatus = { configured: boolean; ended: boolean; accounts: string[]; campaigns: { id: number; name: string }[] };
+ type U = { id: number; name: string; email: string; role: string; status: string; mfaEnabled: boolean; campaignIds: number[] };
+ 
+ const inputCls = "block w-full bg-background border border-border rounded-lg p-2.5 text-sm";
+@@ -85,6 +86,7 @@ export default function TenancyAdmin() {
+   const orgs = useQuery<Org[]>({ queryKey: ["t-orgs"], queryFn: () => api("tenancy/organisations") });
+   const camps = useQuery<Camp[]>({ queryKey: ["t-camps"], queryFn: () => api("tenancy/campaigns") });
+   const users = useQuery<U[]>({ queryKey: ["t-users"], queryFn: () => api("tenancy/users") });
++  const demo = useQuery<DemoStatus>({ queryKey: ["t-demo"], queryFn: () => api("tenancy/demo") });
+   const [err, setErr] = useState(""); const [msg, setMsg] = useState("");
+   const [nc, setNc] = useState({ organisationId: "", name: "", seat: "", area: "", electionDate: "" });
+   const [np, setNp] = useState<Profile>(toProfile());
+@@ -97,7 +99,7 @@ export default function TenancyAdmin() {
+   const [saving, setSaving] = useState(false);
+   const [justCreated, setJustCreated] = useState<number | null>(null);
+   const loadError = orgs.error || camps.error || users.error || geo.error;
+-  const reload = () => { void qc.invalidateQueries({ queryKey: ["t-orgs"] }); void qc.invalidateQueries({ queryKey: ["t-camps"] }); void qc.invalidateQueries({ queryKey: ["t-users"] }); void qc.invalidateQueries({ queryKey: ["tenancy-context"] }); };
++  const reload = () => { void qc.invalidateQueries({ queryKey: ["t-orgs"] }); void qc.invalidateQueries({ queryKey: ["t-camps"] }); void qc.invalidateQueries({ queryKey: ["t-users"] }); void qc.invalidateQueries({ queryKey: ["tenancy-context"] }); void qc.invalidateQueries({ queryKey: ["t-demo"] }); };
+   async function run(fn: () => Promise<unknown>, ok: string) {
+     setErr(""); setMsg(""); setSaving(true);
+     try { await fn(); setMsg(ok); reload(); } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
+@@ -150,6 +152,17 @@ export default function TenancyAdmin() {
+     void run(() => api<{ removed: number }>(`tenancy/campaigns/${c.id}`, { method: "DELETE", body: JSON.stringify({ confirmName: typed }) })
+       .then(() => { setOpen(null); setJustCreated(null); }), `“${c.name}” was deleted.`);
+   };
++  const endDemo = () => {
++    const typed = window.prompt("End the demo? This permanently deletes the demo sign-ins (" + (demo.data?.accounts.join(", ") || "none") + "), their campaigns and everything recorded in them. They won't come back when the server restarts.\n\nType END DEMO to confirm:");
++    if (typed === null) return;
++    if (typed.trim().toUpperCase() !== "END DEMO") { setErr("Type END DEMO exactly to end the demo."); return; }
++    let summary = "";
++    void run(async () => {
++      const r = await api<{ campaigns: number; accounts: number; records: number }>("tenancy/demo/end", { method: "POST", body: "{}" });
++      summary = `Demo ended: ${r.accounts} sign-ins, ${r.campaigns} campaigns and ${r.records} records deleted.`;
++    }, "Demo ended.").then(() => { if (summary) setMsg(summary); });
++  };
++  const startDemo = () => void run(() => api("tenancy/demo/start", { method: "POST", body: "{}" }), "Demo started again: demo.mca, demo.mp and demo.governor can sign in.");
+   const setStatus = (c: Camp, status: string) => run(() => api(`tenancy/campaigns/${c.id}`, { method: "PATCH", body: JSON.stringify({ status }) }), `${c.name} is now ${status}.`);
+   const add = (c: Camp) => addUser && run(() => api(`tenancy/campaigns/${c.id}/members`, { method: "POST", body: JSON.stringify({ userId: Number(addUser) }) }).then(() => setAddUser("")), "Member added.");
+   const remove = (c: Camp, u: U) => run(() => api(`tenancy/campaigns/${c.id}/members/${u.id}`, { method: "DELETE" }), `${u.name} removed from ${c.name}.`);
+@@ -182,6 +195,21 @@ export default function TenancyAdmin() {
+       </form>
+     </div>
+ 
++    {demo.data && (demo.data.accounts.length > 0 || demo.data.campaigns.length > 0 || demo.data.configured) && <section className="kaiti-glass rounded-2xl p-4 space-y-2 border border-amber-500/40">
++      <h2 className="font-semibold">Demo aspirants</h2>
++      {demo.data.accounts.length > 0 || demo.data.campaigns.length > 0 ? <>
++        <p className="text-sm">Demo sign-ins: {demo.data.accounts.join(", ") || "none"} · campaigns: {demo.data.campaigns.map(c => c.name).join("; ") || "none"}</p>
++        <p className="text-xs text-muted-foreground">When the demo is over, end it: the demo sign-ins, their campaigns and everything recorded in them are deleted and are not re-created when the server restarts.</p>
++        <button type="button" disabled={saving} onClick={endDemo} className="text-sm border border-red-500/50 text-red-300 rounded-xl px-3 py-2 inline-flex gap-2 items-center"><Trash2 size={16} /> End demo and delete demo data</button>
++      </> : <>
++        <p className="text-sm">{demo.data.ended ? "The demo has ended; its sign-ins and data are deleted." : "No demo sign-ins exist."}</p>
++        {demo.data.configured
++          ? <><button type="button" disabled={saving} onClick={startDemo} className={primary}><Plus size={16} /> Start demo again</button>
++            <p className="text-xs text-muted-foreground">DEMO_ASPIRANTS_PASSWORD is still set on the server. Remove it in Render when you no longer need demos.</p></>
++          : <p className="text-xs text-muted-foreground">To run a demo again, set DEMO_ASPIRANTS_PASSWORD (16+ characters) in Render and restart.</p>}
++      </>}
++    </section>}
++
+     <section className="kaiti-glass rounded-2xl p-4">
+       <h2 className="font-semibold mb-3">Campaigns</h2>
+       <ul className="divide-y divide-border/60">{camps.data?.map(c => { const members = users.data?.filter(u => u.campaignIds.includes(c.id)) ?? []; return <li key={c.id} id={`campaign-${c.id}`} className={`py-3 scroll-mt-24 ${justCreated === c.id ? "rounded-xl px-3 border border-primary/60 bg-primary/5" : ""}`}>
+diff --git a/tests/acceptance/campaign-setup-flow.test.mjs b/tests/acceptance/campaign-setup-flow.test.mjs
+index 8b2ac9a..6b7d73f 100644
+--- a/tests/acceptance/campaign-setup-flow.test.mjs
++++ b/tests/acceptance/campaign-setup-flow.test.mjs
+@@ -47,8 +47,8 @@ test('test campaigns can be deleted permanently, all or nothing, never the prima
+   assert.match(server, /router\.delete\("\/campaigns\/:id"/);
+   assert.match(server, /id === PRIMARY_CAMPAIGN_ID\) \{ res\.status\(400\)/);
+   assert.match(server, /req\.body\.confirmName\.trim\(\) !== c\.name\.trim\(\)/, 'exact name required');
+-  assert.match(server, /await db\.transaction\(async tx =>/);
+-  assert.match(server, /WHERE owner_campaign_id = \$\{id\}/);
++  assert.match(server, /await db\.transaction\(async tx => \{\n      removed = await deleteCampaignsTx\(tx, \[id\]\);/);
++  assert.match(src('artifacts/api-server/src/lib/campaign-delete.ts'), /WHERE owner_campaign_id IN \(\$\{list\}\)/);
+   const page = src('artifacts/commandcentre/src/pages/tenancy-admin.tsx');
+   assert.match(page, /\{c\.id !== 1 && <button type="button" onClick=\{\(\) => deleteCampaign\(c\)\}/);
+ });
+@@ -74,3 +74,21 @@ test('My Area is a dashboard-level page backed by the campaign-scoped area API',
+   assert.match(src('artifacts/commandcentre/src/pages/my-area.tsx'), /api<Area>\("geography\/my-area"\)/);
+   assert.match(src('artifacts/commandcentre/src/lib/tenancy.ts'), /export async function switchCampaign\(campaignId: number, page = "dashboard"\)/);
+ });
++
++test('the demo can be ended: campaigns, data, sign-ins and sessions deleted, and it stays ended after restarts', () => {
++  const demo = src('artifacts/api-server/src/lib/demo-aspirants.ts');
++  assert.match(demo, /export async function endDemoAspirants/);
++  assert.match(demo, /records = await deleteCampaignsTx\(tx, ids\);/);
++  assert.match(demo, /DELETE FROM user_sessions WHERE sess->>'userId' = \$\{String\(u\.id\)\}/, 'signs demo users out');
++  assert.match(demo, /DELETE FROM public\.kaiti_user_mfa WHERE user_id = \$\{u\.id\}/);
++  assert.match(demo, /DELETE FROM admin_users WHERE notes = \$\{DEMO_NOTE\}/, 'only accounts the demo created');
++  assert.match(demo, /if \(await demoEnded\(\)\) \{ logger\.info\("Demo aspirants were ended/, 'not re-created at restart');
++  assert.match(demo, /await setDemoEnded\(false, by\);\n  await ensureDemoAspirants\(\);/, 'can be started again');
++  const routes = src('artifacts/api-server/src/routes/tenancy.ts');
++  for (const r of ['router.get("/demo"', 'router.post("/demo/end"', 'router.post("/demo/start"']) assert.ok(routes.includes(r), r);
++  assert.match(src('artifacts/api-server/src/lib/campaign-delete.ts'), /const safe = ids\.filter\(id => Number\.isInteger\(id\) && id !== 1\);/, 'never the primary campaign');
++  const page = src('artifacts/commandcentre/src/pages/tenancy-admin.tsx');
++  assert.match(page, /End demo and delete demo data/);
++  assert.match(page, /typed\.trim\(\)\.toUpperCase\(\) !== "END DEMO"/);
++  assert.match(page, /Start demo again/);
++});
+-- 
+2.43.0
+
