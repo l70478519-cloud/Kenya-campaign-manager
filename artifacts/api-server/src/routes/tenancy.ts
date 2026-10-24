@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
-import { campaignsForUser, invalidateTenancyCache, PRIMARY_CAMPAIGN_ID } from "../lib/tenancy";
+import { campaignsForUser, invalidateTenancyCache, isSuperAdmin, PRIMARY_CAMPAIGN_ID } from "../lib/tenancy";
 import { tenantEnforcementActive, runAsSystem } from "@workspace/db";
 import { isolationStatus } from "../lib/tenant-isolation";
 import { KENYA_COUNTIES, KENYA_SEATS, KENYA_TOTALS, SEAT_KEYS, unitsForSeat } from "../data/kenya-electoral-units";
@@ -29,7 +29,10 @@ router.get("/context", async (req, res) => {
 
 router.post("/switch", async (req, res) => {
   const id = Number(req.body?.campaignId);
-  const campaigns = await campaignsForUser(req.currentUser!);
+  // Membership is checked on the shared tables with owner access: inside a campaign the
+  // restricted role can be hidden from them (e.g. Supabase row-level security), which
+  // wrongly refused even super-admins.
+  const campaigns = await runAsSystem(() => campaignsForUser(req.currentUser!));
   if (!campaigns.some(c => c.id === id)) { res.status(403).json({ error: "You aren’t a member of that campaign." }); return; }
   req.session.activeCampaignId = id;
   res.json({ activeCampaignId: id });
@@ -139,10 +142,81 @@ router.patch("/campaigns/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
+/**
+ * Permanently deletes a campaign and every record it owns (any table with
+ * owner_campaign_id), children before parents, in one transaction: all or
+ * nothing. The primary campaign can't be deleted. Parties left with no
+ * campaigns are removed too. The caller must send the campaign's exact name.
+ */
+router.delete("/campaigns/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id === PRIMARY_CAMPAIGN_ID) { res.status(400).json({ error: "The primary campaign can’t be deleted." }); return; }
+  const c = (await db.execute(sql`SELECT id::int, name FROM public.kaiti_campaigns WHERE id = ${id}`)).rows[0] as { id: number; name: string } | undefined;
+  if (!c) { res.status(404).json({ error: "Campaign not found." }); return; }
+  if (typeof req.body?.confirmName !== "string" || req.body.confirmName.trim() !== c.name.trim()) {
+    res.status(400).json({ error: `Type the campaign name exactly (“${c.name}”) to delete it.` }); return;
+  }
+  const tables = ((await db.execute(sql`SELECT table_name AS t FROM information_schema.columns
+    WHERE table_schema = 'public' AND column_name = 'owner_campaign_id'`)).rows as { t: string }[]).map(r => r.t);
+  const fks = (await db.execute(sql`SELECT conrelid::regclass::text AS child, confrelid::regclass::text AS parent FROM pg_constraint
+    WHERE contype = 'f' AND connamespace = 'public'::regnamespace`)).rows as { child: string; parent: string }[];
+  const bare = (n: string) => n.replace(/^public\./, "").replace(/"/g, "");
+  // Children first: a table is deleted once every table that references it has been.
+  const order: string[] = [], left = new Set(tables);
+  while (left.size) {
+    const ready = [...left].filter(t => !fks.some(f => bare(f.parent) === t && bare(f.child) !== t && left.has(bare(f.child))));
+    for (const t of ready.length ? ready : [...left]) { order.push(t); left.delete(t); }
+  }
+  let removed = 0;
+  try {
+    await db.transaction(async tx => {
+      for (const t of order) {
+        const r = await tx.execute(sql.raw(`DELETE FROM public."${t.replace(/"/g, '""')}" WHERE owner_campaign_id = ${id}`));
+        removed += r.rowCount ?? 0;
+      }
+      await tx.execute(sql`DELETE FROM public.kaiti_campaigns WHERE id = ${id}`);
+      await tx.execute(sql`DELETE FROM public.kaiti_organisations o WHERE o.id <> 1
+        AND NOT EXISTS (SELECT 1 FROM public.kaiti_campaigns c WHERE c.organisation_id = o.id)`);
+    });
+  } catch (err) {
+    req.log?.error({ err, campaign: id }, "Campaign delete failed");
+    res.status(409).json({ error: `“${c.name}” could not be deleted, and nothing was removed: ${(err as Error).message}` }); return;
+  }
+  invalidateTenancyCache();
+  await log(actor(req), "Deleted campaign", `#${id} ${c.name} (${removed} records)`);
+  res.json({ ok: true, removed });
+});
+
 router.get("/campaigns/:id/members", async (req, res) => {
   const r = await db.execute(sql`SELECT u.id::int, u.name, u.email, u.role, m.added_by AS "addedBy", m.added_at AS "addedAt"
     FROM public.kaiti_campaign_members m JOIN admin_users u ON u.id = m.user_id WHERE m.campaign_id = ${Number(req.params.id)} ORDER BY u.name`);
   res.json(r.rows);
+});
+
+/**
+ * Opens a campaign for the signed-in administrator: makes it their active
+ * campaign, so every module shows that candidate's seat and area. Super-admins
+ * can already open every campaign. Other administrators are added as members
+ * first; if this is their first membership they are also added to the primary
+ * campaign, because people with no memberships work there by default.
+ */
+router.post("/campaigns/:id/open", async (req, res) => {
+  const id = Number(req.params.id);
+  const user = req.currentUser!;
+  const c = (await db.execute(sql`SELECT id::int, name, status FROM public.kaiti_campaigns WHERE id = ${id}`)).rows[0] as { id: number; name: string; status: string } | undefined;
+  if (!Number.isInteger(id) || !c) { res.status(404).json({ error: "Campaign not found." }); return; }
+  if (c.status === "archived") { res.status(400).json({ error: `“${c.name}” is archived. Set it to Active to open it.` }); return; }
+  if (!isSuperAdmin(user) && user.id > 0) {
+    const hadAny = (await db.execute(sql`SELECT 1 FROM public.kaiti_campaign_members WHERE user_id = ${user.id} LIMIT 1`)).rows.length > 0;
+    if (!hadAny && id !== PRIMARY_CAMPAIGN_ID) {
+      await db.execute(sql`INSERT INTO public.kaiti_campaign_members (campaign_id, user_id, added_by) VALUES (${PRIMARY_CAMPAIGN_ID}, ${user.id}, ${actor(req)}) ON CONFLICT DO NOTHING`);
+    }
+    await db.execute(sql`INSERT INTO public.kaiti_campaign_members (campaign_id, user_id, added_by) VALUES (${id}, ${user.id}, ${actor(req)}) ON CONFLICT DO NOTHING`);
+    await log(actor(req), "Opened campaign (added self as member)", `campaign #${id}`);
+  }
+  invalidateTenancyCache(user.id);
+  req.session.activeCampaignId = id;
+  res.json({ activeCampaignId: id });
 });
 
 router.post("/campaigns/:id/members", async (req, res) => {

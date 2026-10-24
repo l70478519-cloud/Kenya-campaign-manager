@@ -114,6 +114,21 @@ export async function ensureTenantIsolation(): Promise<IsolationStatus> {
       }
 
       // 5. Privileges for the request role (data only, no DDL).
+      // Shared tables (users, roles, campaigns, memberships…) are not per-campaign.
+      // If row-level security is switched on for them outside the app (Supabase can do
+      // this automatically), let the app's own restricted role through. This policy only
+      // applies to that role; Supabase's anon/authenticated roles stay locked out.
+      for (const t of SHARED_TABLES) {
+        const exists = (await db.execute(sql`SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = ${t}`)).rows.length > 0;
+        if (!exists) continue;
+        const q = `public.${ident(t)}`;
+        try {
+          await db.execute(sql.raw(`DROP POLICY IF EXISTS kaiti_shared_access ON ${q}`));
+          await db.execute(sql.raw(`CREATE POLICY kaiti_shared_access ON ${q} FOR ALL TO ${TENANT_ROLE} USING (true) WITH CHECK (true)`));
+        } catch (err) {
+          logger.warn({ err, table: t }, "Could not add the shared-table policy; campaign switching may fail if row-level security is on for this table");
+        }
+      }
       await db.execute(sql.raw(`GRANT USAGE ON SCHEMA public TO ${TENANT_ROLE}`));
       await db.execute(sql.raw(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${TENANT_ROLE}`));
       await db.execute(sql.raw(`GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ${TENANT_ROLE}`));
