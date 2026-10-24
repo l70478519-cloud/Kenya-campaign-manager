@@ -4,6 +4,7 @@ import { unitsForSeat } from "../data/kenya-electoral-units";
 import { campaignArea, referenceStationRows } from "./polling-centres";
 import { hashPassword } from "./auth";
 import { logger } from "./logger";
+import { deleteCampaignsTx, removeEmptyPartiesTx } from "./campaign-delete";
 
 /**
  * Demo aspirants: one sign-in per seat level, each a member of its own
@@ -13,10 +14,64 @@ import { logger } from "./logger";
  * Off unless DEMO_ASPIRANTS_PASSWORD (16+ characters) is set in the hosting
  * environment. No password is ever shipped in code. Safe to run on every start:
  * existing campaigns, accounts and centres are reused. Remove the variable to
- * stop seeding; delete the accounts in Admin to retire them.
+ * stop seeding. "End demo" (endDemoAspirants) deletes the demo campaigns, their
+ * data and the demo sign-ins, and records that the demo has ended so a restart
+ * does not bring it back; "Start demo again" (restartDemoAspirants) undoes that.
  */
 export const DEMO_ORGANISATION = "Demo aspirants";
 const DEMO_NOTE = "Demo aspirant account (DEMO_ASPIRANTS_PASSWORD)";
+/** system_config key: "true" once an administrator has ended the demo. */
+export const DEMO_ENDED_KEY = "demo.aspirants.ended";
+
+async function demoEnded(): Promise<boolean> {
+  const r = (await db.execute(sql`SELECT value FROM system_config WHERE key = ${DEMO_ENDED_KEY} LIMIT 1`)).rows[0] as { value: string } | undefined;
+  return r?.value === "true";
+}
+async function setDemoEnded(ended: boolean, by: string): Promise<void> {
+  await db.execute(sql`INSERT INTO system_config (key, value, category, description, updated_by, updated_at)
+    VALUES (${DEMO_ENDED_KEY}, ${String(ended)}, 'demo', 'Demo aspirants ended by an administrator; not re-created at restart', ${by}, now())
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`);
+}
+
+export type DemoStatus = { configured: boolean; ended: boolean; accounts: string[]; campaigns: { id: number; name: string }[] };
+export async function demoAspirantsStatus(): Promise<DemoStatus> {
+  const accounts = ((await db.execute(sql`SELECT username FROM admin_users WHERE notes = ${DEMO_NOTE} ORDER BY username`)).rows as { username: string }[]).map(r => r.username);
+  const campaigns = (await db.execute(sql`SELECT c.id::int, c.name FROM public.kaiti_campaigns c JOIN public.kaiti_organisations o ON o.id = c.organisation_id
+    WHERE o.name = ${DEMO_ORGANISATION} ORDER BY c.id`)).rows as { id: number; name: string }[];
+  return { configured: (process.env.DEMO_ASPIRANTS_PASSWORD ?? "").length >= 16, ended: await demoEnded(), accounts, campaigns };
+}
+
+/**
+ * Ends the demo: deletes the demo campaigns and everything recorded in them, the
+ * demo sign-ins (with their 2FA records and open sessions) and the demo group,
+ * all in one transaction, then records that the demo has ended.
+ */
+export async function endDemoAspirants(by: string): Promise<{ campaigns: number; accounts: number; records: number }> {
+  const status = await demoAspirantsStatus();
+  const ids = status.campaigns.map(c => c.id);
+  let records = 0, accounts = 0;
+  await db.transaction(async tx => {
+    records = await deleteCampaignsTx(tx, ids);
+    const users = (await tx.execute(sql`SELECT id FROM admin_users WHERE notes = ${DEMO_NOTE}`)).rows as { id: number }[];
+    for (const u of users) {
+      await tx.execute(sql`DELETE FROM public.kaiti_campaign_members WHERE user_id = ${u.id}`);
+      await tx.execute(sql`DELETE FROM public.kaiti_user_mfa WHERE user_id = ${u.id}`);
+      await tx.execute(sql`DELETE FROM user_sessions WHERE sess->>'userId' = ${String(u.id)}`);
+    }
+    accounts = (await tx.execute(sql`DELETE FROM admin_users WHERE notes = ${DEMO_NOTE}`)).rowCount ?? 0;
+    await tx.execute(sql`DELETE FROM public.kaiti_organisations WHERE name = ${DEMO_ORGANISATION} AND id <> 1`);
+    await removeEmptyPartiesTx(tx);
+  });
+  await setDemoEnded(true, by);
+  return { campaigns: ids.length, accounts, records };
+}
+
+/** Clears the "ended" mark and creates the demo again now (needs DEMO_ASPIRANTS_PASSWORD). */
+export async function restartDemoAspirants(by: string): Promise<DemoStatus> {
+  await setDemoEnded(false, by);
+  await ensureDemoAspirants();
+  return demoAspirantsStatus();
+}
 
 export const DEMO_ASPIRANTS = [
   { username: "demo.mca", name: "Demo MCA Aspirant", seat: "MCA", county: "Makueni", constituency: "Kaiti", ward: "Ukia" },
@@ -29,6 +84,7 @@ export async function ensureDemoAspirants(): Promise<void> {
   if (!password) return;
   if (password.length < 16) { logger.warn("DEMO_ASPIRANTS_PASSWORD must be at least 16 characters; demo aspirants not created"); return; }
   try {
+    if (await demoEnded()) { logger.info("Demo aspirants were ended by an administrator; not re-created"); return; }
     const org = (await db.execute(sql`SELECT id::int FROM public.kaiti_organisations WHERE name = ${DEMO_ORGANISATION} ORDER BY id LIMIT 1`)).rows[0] as { id: number } | undefined
       ?? (await db.execute(sql`INSERT INTO public.kaiti_organisations (name) VALUES (${DEMO_ORGANISATION}) RETURNING id::int`)).rows[0] as { id: number };
     const passwordHash = await hashPassword(password);
