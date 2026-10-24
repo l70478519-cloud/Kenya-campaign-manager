@@ -26,10 +26,10 @@ export function useTenancy() {
   });
 }
 
-export async function switchCampaign(campaignId: number) {
+export async function switchCampaign(campaignId: number, page = "dashboard") {
   await api("tenancy/switch", { method: "POST", body: JSON.stringify({ campaignId }) });
   // Every cached query belongs to the old campaign; a reload is the simplest guarantee.
-  window.location.assign(`${import.meta.env.BASE_URL}dashboard`);
+  window.location.assign(`${import.meta.env.BASE_URL}${page}`);
 }
 
 /** True when an older module must be hidden in the active campaign. */
