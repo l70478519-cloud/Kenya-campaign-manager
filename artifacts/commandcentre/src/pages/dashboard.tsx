@@ -24,6 +24,7 @@ import {
 } from "recharts";
 import { api } from "@/lib/records";
 import { useTenancy } from "@/lib/tenancy";
+import { Link } from "wouter";
 
 type Overview = {
   totalMembers: number;
@@ -48,6 +49,13 @@ export default function Dashboard() {
     isError: activityError,
   } = useGetDashboardActivity();
   const { data: tenancy } = useTenancy();
+  // This campaign's own area only; other campaigns are never counted here.
+  const active = tenancy?.campaigns.find((c) => c.id === tenancy.activeCampaignId);
+  const myArea = useQuery({
+    queryKey: ["my-area-totals", tenancy?.activeCampaignId],
+    queryFn: () => api<{ label: string; totals: { wards: number; centres: number } }>("geography/my-area?centres=0"),
+    enabled: !!tenancy?.activeCampaignId,
+  });
   const [help, setHelp] = useState(false);
   const [fullTrail, setFullTrail] = useState(false);
   const d = overview.data;
@@ -69,12 +77,11 @@ export default function Dashboard() {
         "New members this calendar month compared with last month; unavailable without a previous-month baseline",
     },
     {
-      label: "ACTIVE CAMPAIGNS",
-      value: tenancy
-        ? number(tenancy.campaigns.filter((c) => c.status === "active").length)
-        : "—",
+      label: "POLLING CENTRES",
+      value: number(myArea.data?.totals.centres),
       icon: Radio,
-      title: "Active campaign workspaces you can access",
+      note: myArea.data ? `${number(myArea.data.totals.wards)} wards` : undefined,
+      title: "IEBC polling centres in this campaign's area",
     },
     {
       label: "VOLUNTEERS",
@@ -120,6 +127,18 @@ export default function Dashboard() {
   };
   return (
     <div className="space-y-7">
+      {active && (
+        <Link href="/my-area" className="replica-panel p-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold tracking-wide text-muted-foreground">CANDIDATE</p>
+            <h2 className="text-xl font-bold truncate">{active.candidateName || active.name}</h2>
+            <p className="text-sm text-muted-foreground">
+              {[active.party, active.seat, myArea.data?.label ?? active.area, active.electionDate ? `election ${active.electionDate}` : null].filter(Boolean).join(" · ")}
+            </p>
+          </div>
+          <span className="text-sm text-primary underline">View my area</span>
+        </Link>
+      )}
       <div className="flex justify-end">
         <button
           onClick={() => setHelp(!help)}

@@ -349,13 +349,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               >
                 {tenancy.campaigns.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name}
-                    {c.organisationName &&
-                    tenancy.campaigns.some(
-                      (x) => x.organisationId !== c.organisationId,
-                    )
-                      ? ` — ${c.organisationName}`
-                      : ""}
+                    {c.candidateName ? `${c.candidateName} — ${c.name}` : c.name}
                   </option>
                 ))}
               </select>
@@ -377,7 +371,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 area so every module knows its wards.{" "}
                 {can("admin", "write") ? (
                   <Link href="/tenancy" className="underline font-semibold">
-                    Open Organisations &amp; campaigns
+                    Open Campaign setup
                   </Link>
                 ) : (
                   "Ask an administrator to complete the setup."

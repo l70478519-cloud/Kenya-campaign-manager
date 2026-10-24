@@ -42,7 +42,7 @@ export default function MyArea() {
     {active?.profileSummary && <section className="kaiti-glass rounded-2xl p-4 space-y-2">
       <h2 className="font-semibold">Candidate profile</h2>
       <p className="text-sm whitespace-pre-line">{active.profileSummary}</p>
-      <p className="text-xs text-muted-foreground">The AI assistant, speeches and briefs use this profile. Edit it in Organisations &amp; campaigns.</p>
+      <p className="text-xs text-muted-foreground">The AI assistant, speeches and briefs use this profile. Edit it in Settings → Campaigns.</p>
     </section>}
 
     {area.isPending && <p role="status" className="text-sm text-muted-foreground">Loading your area…</p>}
