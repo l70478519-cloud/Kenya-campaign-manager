@@ -61,7 +61,12 @@ export function verifyTotp(secretB32: string, code: string, now = Date.now()): n
 }
 
 // ── Encryption at rest ───────────────────────────────────────────────────────
+let warnedNoMfaKey = false;
 function key(): Buffer {
+  if (!process.env.MFA_ENCRYPTION_KEY && process.env.NODE_ENV === "production" && !warnedNoMfaKey) {
+    warnedNoMfaKey = true;
+    console.warn("MFA_ENCRYPTION_KEY is not set; 2FA secrets are encrypted with a fallback key. Set it in Render > Environment.");
+  }
   const material = process.env.MFA_ENCRYPTION_KEY || process.env.SESSION_SECRET || "insecure-dev-mfa-key";
   return createHash("sha256").update("kaitios-mfa:" + material).digest();
 }

@@ -46,8 +46,9 @@ router.get("/stats", async (req, res) => {
 // ── List ───────────────────────────────────────────────────────────────────
 router.get("/", async (req, res) => {
   const { search, ward, status, source, limit: limitStr, offset: offsetStr } = req.query as Record<string, string>;
-  const limit = parseInt(limitStr ?? "100");
-  const offset = parseInt(offsetStr ?? "0");
+  // Cap page size: one request must never return the whole register.
+  const limit = Math.min(200, Math.max(1, Number.parseInt(limitStr ?? "100", 10) || 100));
+  const offset = Math.max(0, Number.parseInt(offsetStr ?? "0", 10) || 0);
 
   const conditions = [or(inArray(voterRegistryTable.ward, campaignWards()), isNull(voterRegistryTable.ward))!];
   if (search) {
