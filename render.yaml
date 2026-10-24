@@ -38,3 +38,9 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: SYSTEM_EMAIL
+        value: info@aclss.co.ke
+      - key: MAIL_FROM
+        value: info@aclss.co.ke
+      - key: BREVO_API_KEY
+        sync: false

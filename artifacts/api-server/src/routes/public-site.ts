@@ -4,6 +4,7 @@ import { db, runAsSystem } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { tooManyAttempts } from "../lib/mfa";
 import { KENYA_SEATS, KENYA_COUNTIES } from "../data/kenya-electoral-units";
+import { sendNotificationEmail } from "../lib/notify-email";
 
 /**
  * Public endpoints for the marketing website (demo requests). Stored in a
@@ -44,6 +45,17 @@ router.post("/demo-request", async (req, res) => {
   await runAsSystem(() => db.execute(sql`INSERT INTO public.kaiti_demo_requests (name, organisation, role, seat, county, phone, email, message, source_page)
     VALUES (${v.name}, ${v.organisation || null}, ${v.role || null}, ${v.seat || null}, ${v.county || null}, ${v.phone || null}, ${v.email || null}, ${v.message || null}, ${v.sourcePage || null})`));
   res.status(201).json({ ok: true });
+  const seatLabel = KENYA_SEATS.find(s => s.key === v.seat);
+  void sendNotificationEmail({
+    subject: `New demo request: ${v.name}${v.organisation ? ` (${v.organisation})` : ""}`,
+    replyTo: v.email || undefined,
+    rows: [
+      ["Name", v.name], ["Phone", v.phone], ["Email", v.email],
+      ["Seat", seatLabel?.label ?? v.seat],
+      ["County", v.county], ["Organisation", v.organisation], ["Role", v.role],
+      ["Message", v.message], ["Page", v.sourcePage],
+    ],
+  });
 });
 
 /** The campaign that owns public forms (campaign #1): its display name and wards only. */
