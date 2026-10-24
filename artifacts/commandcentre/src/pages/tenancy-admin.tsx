@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Plus, UserPlus, X, ShieldOff } from "lucide-react";
+import { Building2, Plus, UserPlus, X, ShieldOff, MapPin } from "lucide-react";
 import { api, humanize } from "@/lib/records";
 import { switchCampaign } from "@/lib/tenancy";
 
@@ -50,10 +50,11 @@ function SeatPicker({ geo, v, set, optional }: { geo: Geo | undefined; v: { seat
   </div>;
 }
 
-function ProfileFields({ v, set, derived }: { v: Profile; set: (p: Profile) => void; derived?: boolean }) {
+function ProfileFields({ v, set, derived, parties = [] }: { v: Profile; set: (p: Profile) => void; derived?: boolean; parties?: string[] }) {
   return <div className="grid sm:grid-cols-2 gap-2">
     <label className="text-sm">Candidate name<input value={v.candidateName} onChange={e => set({ ...v, candidateName: e.target.value })} className={inputCls} /></label>
-    <label className="text-sm">Party<input value={v.party} onChange={e => set({ ...v, party: e.target.value })} className={inputCls} /></label>
+    <label className="text-sm">Political party<input value={v.party} maxLength={160} list="party-suggestions" onChange={e => set({ ...v, party: e.target.value })} className={inputCls} placeholder="e.g. UDA or ODM; leave empty if Independent" />
+      <datalist id="party-suggestions">{parties.map(p => <option key={p} value={p} />)}</datalist></label>
     {!derived && <><label className="text-sm">Constituency / area<input required minLength={2} value={v.constituency} onChange={e => set({ ...v, constituency: e.target.value })} className={inputCls} placeholder="e.g. Mbooni" /></label>
     <label className="text-sm">County<input value={v.county} onChange={e => set({ ...v, county: e.target.value })} className={inputCls} placeholder="e.g. Makueni" /></label>
     <label className="text-sm sm:col-span-2">Wards <span className="text-xs text-muted-foreground">(comma-separated, as listed by IEBC)</span>
@@ -76,7 +77,6 @@ export default function TenancyAdmin() {
   const camps = useQuery<Camp[]>({ queryKey: ["t-camps"], queryFn: () => api("tenancy/campaigns") });
   const users = useQuery<U[]>({ queryKey: ["t-users"], queryFn: () => api("tenancy/users") });
   const [err, setErr] = useState(""); const [msg, setMsg] = useState("");
-  const [organisationInput, setOrganisationInput] = useState("");
   const [nc, setNc] = useState({ organisationId: "", name: "", seat: "", area: "", electionDate: "" });
   const [np, setNp] = useState<Profile>(toProfile());
   const geo = useQuery<Geo>({ queryKey: ["kenya-geo"], queryFn: () => api<Geo>("tenancy/geography"), staleTime: Infinity });
@@ -86,49 +86,44 @@ export default function TenancyAdmin() {
   const [open, setOpen] = useState<number | null>(null);
   const [addUser, setAddUser] = useState("");
   const [saving, setSaving] = useState(false);
+  const [justCreated, setJustCreated] = useState<number | null>(null);
   const loadError = orgs.error || camps.error || users.error || geo.error;
-  useEffect(() => {
-    if (orgs.data?.length === 1) {
-      setNc(v => v.organisationId ? v : { ...v, organisationId: String(orgs.data![0].id) });
-      setOrganisationInput(v => v || orgs.data![0].name);
-    }
-  }, [orgs.data]);
-
   const reload = () => { void qc.invalidateQueries({ queryKey: ["t-orgs"] }); void qc.invalidateQueries({ queryKey: ["t-camps"] }); void qc.invalidateQueries({ queryKey: ["t-users"] }); void qc.invalidateQueries({ queryKey: ["tenancy-context"] }); };
   async function run(fn: () => Promise<unknown>, ok: string) {
     setErr(""); setMsg(""); setSaving(true);
     try { await fn(); setMsg(ok); reload(); } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
   }
 
-  const matchingOrganisation = orgs.data?.find(o => o.name.trim().toLowerCase() === organisationInput.trim().toLowerCase());
+  // Each political party (or "Independent") groups its campaigns; there is no separate organisation to manage.
+  const PRIMARY_ORG_ID = 1;
+  const parties = [...new Map((orgs.data ?? []).filter(o => o.id !== PRIMARY_ORG_ID).map(o => [o.name.trim().toLowerCase(), o.name.trim()])).values()];
+  const partyName = np.party.trim() || "Independent";
   const createCamp = (e: FormEvent) => {
     e.preventDefault();
-    const name = organisationInput.trim();
-    if (name.length < 2 || name.length > 160) { setErr("Enter an organisation name of 2–160 characters."); return; }
+    if (partyName.length < 2) { setErr("Enter the political party (at least 2 characters), or leave it empty for an Independent candidate."); return; }
+    const who = np.candidateName.trim() || nc.name.trim();
     void run(async () => {
-      // Resolve typed names before creating the campaign. Cache a new organisation
-      // immediately so retrying a failed campaign save reuses its existing ID.
-      let organisation = matchingOrganisation;
-      if (!organisation) {
-        const created = await api<Org>("tenancy/organisations", { method: "POST", body: JSON.stringify({ name }) });
-        organisation = { ...created, campaignCount: 0 };
-        const saved = organisation;
+      let party = orgs.data?.find(o => o.id !== PRIMARY_ORG_ID && o.name.trim().toLowerCase() === partyName.toLowerCase());
+      if (!party) {
+        const created = await api<Org>("tenancy/organisations", { method: "POST", body: JSON.stringify({ name: partyName }) });
+        party = { ...created, campaignCount: 0 };
+        const saved = party;
         qc.setQueryData<Org[]>(["t-orgs"], old => [...(old ?? []), saved]);
-        setNc(v => ({ ...v, organisationId: String(saved.id) }));
-        setOrganisationInput(saved.name);
       }
       const campaign = await api<{ id: number; name: string }>("tenancy/campaigns", { method: "POST", body: JSON.stringify({
-        organisationId: organisation.id, name: nc.name, electionDate: nc.electionDate || null,
+        organisationId: party.id, name: nc.name, electionDate: nc.electionDate || null,
         seat: area.seat, areaCounty: area.county || null, areaConstituency: area.constituency || null, areaWard: area.ward || null,
-        ...profilePayload(np, true),
+        ...profilePayload({ ...np, party: party.name }, true), // the party's existing spelling
       }) });
-      setNc({ organisationId: String(organisation.id), name: "", seat: "", area: "", electionDate: "" });
+      setNc({ organisationId: "", name: "", seat: "", area: "", electionDate: "" });
       setNp(toProfile()); setArea({ seat: "", county: "", constituency: "", ward: "" });
-      // Open the new campaign straight away and show its area. Only campaigns you can open can be switched to.
-      try { await switchCampaign(campaign.id, "my-area"); }
-      catch { throw new Error(`“${campaign.name}” was created, but you aren’t a member of it, so it can’t be opened yet. Add yourself under Campaigns below, then choose it in the campaign menu.`); }
-    }, "Campaign created. Opening its area…");
+      // Show the new campaign, filled in, with "Add members" ready.
+      setEdit(null); setOpen(campaign.id); setJustCreated(campaign.id);
+      window.setTimeout(() => document.getElementById(`campaign-${campaign.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 400);
+    }, `Campaign created for ${who}. Add members below so they can sign in and open it.`);
   };
+  const openCampaign = (c: Camp) => void switchCampaign(c.id, "my-area").catch(() =>
+    setErr(`You aren’t a member of “${c.name}”, so it can’t be opened yet. Add yourself under Add members, then try again.`));
   const setStatus = (c: Camp, status: string) => run(() => api(`tenancy/campaigns/${c.id}`, { method: "PATCH", body: JSON.stringify({ status }) }), `${c.name} is now ${status}.`);
   const add = (c: Camp) => addUser && run(() => api(`tenancy/campaigns/${c.id}/members`, { method: "POST", body: JSON.stringify({ userId: Number(addUser) }) }).then(() => setAddUser("")), "Member added.");
   const remove = (c: Camp, u: U) => run(() => api(`tenancy/campaigns/${c.id}/members/${u.id}`, { method: "DELETE" }), `${u.name} removed from ${c.name}.`);
@@ -138,7 +133,7 @@ export default function TenancyAdmin() {
   };
 
   return <div className="space-y-6 min-w-0">
-    <header><h1 className="text-2xl font-bold flex items-center gap-2"><Building2 className="text-primary" size={24} /> Organisations & campaigns</h1>
+    <header><h1 className="text-2xl font-bold flex items-center gap-2"><Building2 className="text-primary" size={24} /> Campaigns</h1>
       <p className="text-sm text-muted-foreground max-w-3xl">Each campaign keeps its own records. People only see campaigns they’re members of; anyone with no memberships works in the primary campaign. Super-admins can open every campaign.</p></header>
     {loadError && <div role="alert" className="border border-red-500/40 rounded-xl p-3 text-sm space-y-2">
       <p>Could not load campaign setup: {(loadError as Error).message}</p>
@@ -151,51 +146,50 @@ export default function TenancyAdmin() {
       <form onSubmit={createCamp} className="kaiti-glass rounded-2xl p-4 space-y-3">
         <h2 className="font-semibold">New campaign</h2>
         <div className="grid sm:grid-cols-2 gap-2">
-          <label className="text-sm">Organisation
-            <input required minLength={2} maxLength={160} list="campaign-organisations" aria-label="Campaign organisation"
-              disabled={orgs.isPending || !!orgs.error || saving} value={organisationInput}
-              onChange={e => { setOrganisationInput(e.target.value); setNc(v => ({ ...v, organisationId: "" })); }}
-              placeholder={orgs.isPending ? "Loading organisations…" : "Type or choose an organisation"} className={inputCls} />
-            <datalist id="campaign-organisations">{[...new Map((orgs.data ?? []).map(o => [o.name.trim().toLowerCase(), o])).values()].map(o => <option key={o.id} value={o.name} />)}</datalist>
-            <span className="block mt-1 text-xs text-muted-foreground">{matchingOrganisation ? "Existing organisation selected." : organisationInput.trim().length >= 2 ? "This organisation will be created when you save the campaign." : "Choose a suggestion or type a new organisation name."}</span>
-          </label>
           <label className="text-sm">Campaign name<input required minLength={2} value={nc.name} onChange={e => setNc({ ...nc, name: e.target.value })} className={inputCls} /></label>
           <label className="text-sm">Election date<input type="date" value={nc.electionDate} onChange={e => setNc({ ...nc, electionDate: e.target.value })} className={inputCls} /></label>
         </div>
         <SeatPicker geo={geo.data} v={area} set={setArea} />
-        <ProfileFields v={np} set={setNp} derived />
-        <button type="submit" disabled={saving || orgs.isPending || !!orgs.error || organisationInput.trim().length < 2} className={primary}><Plus size={16} /> {saving ? "Saving…" : "Create campaign"}</button>
+        <ProfileFields v={np} set={setNp} derived parties={parties} />
+        <button type="submit" disabled={saving || orgs.isPending || !!orgs.error} className={primary}><Plus size={16} /> {saving ? "Saving…" : "Create campaign"}</button>
       </form>
     </div>
 
     <section className="kaiti-glass rounded-2xl p-4">
       <h2 className="font-semibold mb-3">Campaigns</h2>
-      <ul className="divide-y divide-border/60">{camps.data?.map(c => { const members = users.data?.filter(u => u.campaignIds.includes(c.id)) ?? []; return <li key={c.id} className="py-3">
+      <ul className="divide-y divide-border/60">{camps.data?.map(c => { const members = users.data?.filter(u => u.campaignIds.includes(c.id)) ?? []; return <li key={c.id} id={`campaign-${c.id}`} className={`py-3 scroll-mt-24 ${justCreated === c.id ? "rounded-xl px-3 border border-primary/60 bg-primary/5" : ""}`}>
         <div className="flex flex-wrap justify-between gap-2 items-center">
           <button type="button" onClick={() => { setOpen(open === c.id ? null : c.id); setEdit(null); }} className="text-left min-w-0" aria-expanded={open === c.id}>
-            <span className="font-medium block">{c.name}{c.id === 1 && <span className="text-xs text-primary ml-2">primary</span>}</span>
-            <span className="text-xs text-muted-foreground">{c.organisationName}{c.seat ? ` · ${c.seat}` : ""}{c.area ? ` · ${c.area}` : ""}{c.electionDate ? ` · election ${c.electionDate}` : ""} · {c.memberCount} member{c.memberCount === 1 ? "" : "s"}</span>
+            <span className="font-medium block">{c.candidateName || c.name}{c.id === 1 && <span className="text-xs text-primary ml-2">primary</span>}{justCreated === c.id && <span className="text-xs text-primary ml-2">new</span>}</span>
+            <span className="text-xs text-muted-foreground">{[c.candidateName ? c.name : null, c.party, c.seat, c.area, c.electionDate ? `election ${c.electionDate}` : null].filter(Boolean).join(" · ") || "Seat and area not set"}</span>
           </button>
           <select aria-label={`Status of ${c.name}`} value={c.status} onChange={e => void setStatus(c, e.target.value)} className="bg-background border border-border rounded-lg p-1.5 text-sm">
             {["active", "paused", ...(c.id === 1 ? [] : ["archived"])].map(s => <option key={s} value={s}>{humanize(s)}</option>)}</select>
         </div>
         {open === c.id && <div className="mt-3 pl-3 border-l-2 border-primary/50 space-y-2">
-          <p className="text-xs text-muted-foreground">{c.constituency ?? "No constituency set"} · {c.wards.length} wards{c.wards.length ? `: ${c.wards.join(", ")}` : ""}{c.candidateName ? ` · ${c.candidateName}` : ""}</p>
+          <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+            {([["Candidate", c.candidateName], ["Political party", c.party], ["Seat", c.seat], ["Area", c.area ?? c.constituency], ["Election date", c.electionDate],
+              ["Wards", c.wards.length ? `${c.wards.length}: ${c.wards.join(", ")}` : null]] as [string, string | null][]).map(([k, v]) =>
+              <div key={k} className={k === "Wards" ? "sm:col-span-2" : ""}><dt className="text-xs text-muted-foreground inline">{k}: </dt><dd className="inline">{v || <span className="text-muted-foreground">not set</span>}</dd></div>)}
+            {c.profileSummary && <div className="sm:col-span-2"><dt className="text-xs text-muted-foreground">Profile</dt><dd className="whitespace-pre-line">{c.profileSummary}</dd></div>}
+          </dl>
           {edit ? <form onSubmit={e => { e.preventDefault(); void run(() => api(`tenancy/campaigns/${c.id}`, { method: "PATCH", body: JSON.stringify(editArea.seat
               ? { seat: editArea.seat, areaCounty: editArea.county || null, areaConstituency: editArea.constituency || null, areaWard: editArea.ward || null, ...profilePayload(edit, true) }
               : profilePayload(edit)) }).then(() => setEdit(null)), "Campaign profile saved. People in this campaign see the change after reloading."); }} className="space-y-2">
             <p className="text-xs text-muted-foreground">Set the seat and area to load the wards automatically, or leave the seat empty and edit the wards by hand.</p>
             <SeatPicker geo={geo.data} v={editArea} set={setEditArea} optional />
-            <ProfileFields v={edit} set={setEdit} derived={!!editArea.seat} />
+            <ProfileFields v={edit} set={setEdit} derived={!!editArea.seat} parties={parties} />
             <div className="flex gap-2"><button type="submit" className={primary}>Save profile</button><button type="button" onClick={() => setEdit(null)} className="border border-border rounded-xl px-3 py-2 text-sm">Cancel</button></div>
           </form> : <button type="button" onClick={() => { setEdit(toProfile(c)); setEditArea({ seat: "", county: "", constituency: "", ward: "" }); }} className="text-xs border border-border rounded-lg px-2 py-1">{c.wards.length ? "Edit seat, wards & profile" : "Set seat & area"}</button>}
-          {c.id === 1 && <p className="text-xs text-muted-foreground">Users with no memberships also work here.</p>}
+          <h3 className="font-semibold text-sm pt-2">Add members</h3>
+          <p className="text-xs text-muted-foreground">People added here can sign in and open this campaign; they see only its area.{c.id === 1 ? " Users with no memberships also work here." : ""}</p>
           <ul className="text-sm space-y-1">{members.map(u => <li key={u.id} className="flex justify-between gap-2"><span>{u.name} <span className="text-xs text-muted-foreground">{u.role}</span></span>
             <button type="button" aria-label={`Remove ${u.name}`} onClick={() => void remove(c, u)} className="p-1"><X size={14} /></button></li>)}
             {members.length === 0 && <li className="text-xs text-muted-foreground">No members yet.</li>}</ul>
           <div className="flex gap-2"><select aria-label="Person to add" value={addUser} onChange={e => setAddUser(e.target.value)} className={inputCls}><option value="">Add a person…</option>
             {users.data?.filter(u => !u.campaignIds.includes(c.id)).map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}</select>
             <button type="button" disabled={!addUser} onClick={() => void add(c)} className={primary}><UserPlus size={16} /> Add</button></div>
+          <button type="button" onClick={() => openCampaign(c)} className="text-sm border border-primary/60 text-primary rounded-xl px-3 py-2 inline-flex gap-2 items-center"><MapPin size={16} /> Open this campaign</button>
         </div>}
       </li>; })}</ul>
     </section>
